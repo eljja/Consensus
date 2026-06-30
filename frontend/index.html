@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주식 컨센서스 예측 분석 대시보드</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Ambient background blobs -->
+  <div class="ambient-bg">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loader-ring">
+      <div></div><div></div><div></div><div></div>
+    </div>
+    <p class="loader-text">데이터 로딩 중...</p>
+  </div>
+
+  <!-- Top bar -->
+  <header class="top-bar">
+    <div class="top-bar-inner">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">주식 컨센서스 예측 분석 대시보드</h1>
+          <p class="brand-sub" id="generated-at">데이터 생성일: —</p>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <div class="live-dot"></div>
+        <span class="live-label">LIVE</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- Stock Selector -->
+    <section class="section stock-selector-section fade-in">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          종목 선택
+        </h2>
+      </div>
+      <div class="stock-selector-wrapper">
+        <div class="market-group" id="market-group-us">
+          <span class="market-label">🇺🇸 US</span>
+          <div class="pill-group" id="pills-us"></div>
+        </div>
+        <div class="market-group" id="market-group-kr">
+          <span class="market-label">🇰🇷 KR</span>
+          <div class="pill-group" id="pills-kr"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Summary Cards -->
+    <section class="section cards-section fade-in" style="--delay:.1s">
+      <div class="cards-grid">
+        <div class="summary-card" id="card-price">
+          <div class="card-icon icon-price">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <p class="card-label">현재가</p>
+          <p class="card-value" id="val-price">—</p>
+          <p class="card-sub" id="sub-price"></p>
+        </div>
+        <div class="summary-card" id="card-target">
+          <div class="card-icon icon-target">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          </div>
+          <p class="card-label">평균 목표가</p>
+          <p class="card-value" id="val-target">—</p>
+          <p class="card-sub" id="sub-target"></p>
+        </div>
+        <div class="summary-card" id="card-bias">
+          <div class="card-icon icon-bias">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+          </div>
+          <p class="card-label">평균 괴리율</p>
+          <p class="card-value" id="val-bias">—</p>
+          <p class="card-sub" id="sub-bias"></p>
+        </div>
+        <div class="summary-card" id="card-reports">
+          <div class="card-icon icon-reports">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <p class="card-label">리포트 수</p>
+          <p class="card-value" id="val-reports">—</p>
+          <p class="card-sub" id="sub-reports"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chart 1: Price + Target Timeline -->
+    <section class="section fade-in" style="--delay:.2s">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          주가 + 목표가 타임라인
+        </h2>
+      </div>
+      <div class="glass-panel chart-panel">
+        <div id="chart-timeline"></div>
+      </div>
+    </section>
+
+    <!-- Chart 2: Firm Bias Ranking -->
+    <section class="section fade-in" style="--delay:.3s">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          증권사별 Bias 랭킹
+        </h2>
+        <p class="section-desc">현재 선택된 종목에 대한 증권사 목표가 괴리율 비교</p>
+      </div>
+      <div class="glass-panel chart-panel">
+        <div id="chart-bias-ranking"></div>
+      </div>
+    </section>
+
+    <!-- Charts row: Heatmap + Accuracy Trend -->
+    <div class="charts-row fade-in" style="--delay:.4s">
+      <!-- Chart 3: Heatmap -->
+      <section class="section section-half">
+        <div class="section-header">
+          <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            증권사 × 종목 히트맵
+          </h2>
+        </div>
+        <div class="glass-panel chart-panel">
+          <div id="chart-heatmap"></div>
+        </div>
+      </section>
+
+      <!-- Chart 4: Accuracy Trend -->
+      <section class="section section-half">
+        <div class="section-header">
+          <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            예측 정확도 트렌드
+          </h2>
+          <p class="section-desc">리포트 수 상위 5개 증권사</p>
+        </div>
+        <div class="glass-panel chart-panel">
+          <div id="chart-accuracy"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Reports Table -->
+    <section class="section fade-in" style="--delay:.5s">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          전체 리포트 목록
+        </h2>
+        <div class="table-controls">
+          <input type="text" id="table-search" class="table-search" placeholder="검색 (증권사, 종목, 애널리스트...)" />
+        </div>
+      </div>
+      <div class="glass-panel table-panel">
+        <div class="table-scroll">
+          <table class="report-table" id="report-table">
+            <thead>
+              <tr>
+                <th data-sort="date" class="sortable active-sort">날짜 <span class="sort-icon">▼</span></th>
+                <th data-sort="stock" class="sortable">종목 <span class="sort-icon">⇅</span></th>
+                <th data-sort="firm" class="sortable">증권사 <span class="sort-icon">⇅</span></th>
+                <th data-sort="analyst" class="sortable">애널리스트 <span class="sort-icon">⇅</span></th>
+                <th data-sort="target" class="sortable">목표가 <span class="sort-icon">⇅</span></th>
+                <th data-sort="bias" class="sortable">괴리율(%) <span class="sort-icon">⇅</span></th>
+                <th>카테고리</th>
+              </tr>
+            </thead>
+            <tbody id="report-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="table-count">총 0건</span>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© 2026 주식 컨센서스 예측 분석 시스템 &nbsp;|&nbsp; 데이터는 참고용이며 투자 권유가 아닙니다.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="app.js"></script>
+</body>
+</html>
