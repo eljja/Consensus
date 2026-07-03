@@ -6,9 +6,6 @@ dist/
 build/
 .env
 
-# Data
-frontend/data.json
-
 # IDE
 .vscode/
 .idea/

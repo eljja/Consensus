@@ -75,9 +75,9 @@ HANKYUNG_DELAY = 0.3
 # Bias thresholds
 BIAS_OVERLY_OPTIMISTIC = 30   # > 30 %
 BIAS_OPTIMISTIC = 15          # 15‑30 %
-BIAS_CONSERVATIVE = -15       # < ‑15 %
+BIAS_CONSERVATIVE = -15       # < -15 %
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "frontend"
+OUTPUT_DIR = Path(__file__).resolve().parent
 
 # Hankyung API auth token (public, embedded in their JS bundles)
 HANKYUNG_TOKEN = "Bearer 0ZdNlr7LrQoawewqweq78k6usasBsqhqSIaUarSTf8mxnHuQVh9CvKAfpUy94LhBmZMg"
