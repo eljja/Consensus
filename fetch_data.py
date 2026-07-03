@@ -1,9 +1,9 @@
 """
 Stock Consensus Bias Analysis — Data Fetcher & Analyzer
 =========================================================
-Collects analyst consensus data (target prices, grades) for 20 representative
-US and Korean stocks, merges with actual price history, computes forecasting
-bias metrics, and exports everything to frontend/data.json.
+Collects analyst consensus data (target prices, grades) for 40 representative
+US and Korean stocks (20 US + 20 KR), merges with actual price history,
+computes forecasting bias metrics, and exports everything to data.json.
 
 Data Sources
 ------------
@@ -20,6 +20,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -36,7 +37,7 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 # Configuration
 # ---------------------------------------------------------------------------
 
-# US stocks (10)
+# US stocks (20)
 US_STOCKS = {
     "AAPL":  "Apple",
     "MSFT":  "Microsoft",
@@ -48,9 +49,19 @@ US_STOCKS = {
     "LLY":   "Eli Lilly",
     "AVGO":  "Broadcom",
     "JPM":   "JPMorgan Chase",
+    "WMT":   "Walmart",
+    "V":     "Visa",
+    "MA":    "Mastercard",
+    "NFLX":  "Netflix",
+    "AMD":   "Advanced Micro Devices",
+    "DIS":   "Walt Disney",
+    "ORCL":  "Oracle",
+    "COST":  "Costco",
+    "PEP":   "PepsiCo",
+    "KO":    "Coca-Cola",
 }
 
-# Korean stocks (10) — code : name
+# Korean stocks (20) — code : name
 KR_STOCKS = {
     "005930": "삼성전자",
     "000660": "SK하이닉스",
@@ -62,19 +73,28 @@ KR_STOCKS = {
     "035420": "NAVER",
     "000270": "기아",
     "035720": "카카오",
+    "105560": "KB금융",
+    "055550": "신한지주",
+    "000810": "삼성화재",
+    "012330": "현대모비스",
+    "051910": "LG화학",
+    "006400": "삼성SDI",
+    "028260": "삼성물산",
+    "032830": "삼성생명",
+    "015760": "한국전력",
+    "034020": "두산에너빌리티",
 }
 
 # How many years of Naver Finance research pages to scan
 NAVER_SCAN_YEARS = 3
 
-# Rate‑limiting delays (seconds)
-NAVER_LIST_DELAY = 0.4
-NAVER_DETAIL_DELAY = 0.4
-HANKYUNG_DELAY = 0.3
+# Rate-limiting delays (seconds)
+NAVER_LIST_DELAY = 0.3
+HANKYUNG_DELAY = 0.2
 
 # Bias thresholds
 BIAS_OVERLY_OPTIMISTIC = 30   # > 30 %
-BIAS_OPTIMISTIC = 15          # 15‑30 %
+BIAS_OPTIMISTIC = 15          # 15-30 %
 BIAS_CONSERVATIVE = -15       # < -15 %
 
 OUTPUT_DIR = Path(__file__).resolve().parent
@@ -121,7 +141,11 @@ def fetch_price_history(ticker: str, period: str = "5y") -> list[dict]:
     """Return list of {date, close} dicts."""
     print(f"  📈 Fetching price history for {ticker}...")
     t = yf.Ticker(ticker)
-    hist = t.history(period=period)
+    try:
+        hist = t.history(period=period)
+    except Exception as e:
+        print(f"    ⚠️  Error fetching history for {ticker}: {e}")
+        return []
     if hist.empty:
         print(f"    ⚠️  No price data for {ticker}")
         return []
@@ -136,6 +160,8 @@ def fetch_price_history(ticker: str, period: str = "5y") -> list[dict]:
 
 def get_price_on_date(price_history: list[dict], target_date: str) -> float | None:
     """Find the closing price on or just before target_date."""
+    if not price_history:
+        return None
     target = datetime.strptime(target_date, "%Y-%m-%d")
     best = None
     best_diff = timedelta(days=9999)
@@ -183,17 +209,53 @@ def fetch_us_analyst_targets(ticker: str) -> list[dict]:
     return reports
 
 # ---------------------------------------------------------------------------
-# 3. Fetch KR analyst targets — Naver Finance scraping
+# 3. Fetch KR analyst targets — Naver Finance multithreaded scraping
 # ---------------------------------------------------------------------------
+
+def fetch_naver_detail(report_item: dict) -> dict:
+    """Worker function to fetch single Naver report detail page."""
+    nid = report_item.get("nid")
+    if not nid:
+        return report_item
+
+    detail_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}"
+    target_price = None
+    grade = ""
+
+    try:
+        html = naver_request(detail_url)
+        soup = BeautifulSoup(html, "html.parser")
+        view_info = soup.find("div", class_="view_info_1")
+        if view_info:
+            money_el = view_info.find("em", class_="money")
+            opinion_el = view_info.find("em", class_="coment")
+            target_price = safe_float(
+                money_el.get_text(strip=True) if money_el else None
+            )
+            grade = opinion_el.get_text(strip=True) if opinion_el else ""
+    except Exception:
+        pass
+
+    return {
+        "code": report_item["code"],
+        "date": report_item["date"],
+        "firm": report_item["firm"],
+        "analyst": "",
+        "target_price": target_price,
+        "prior_target": None,
+        "grade": grade,
+        "action": "",
+        "source": "naver",
+    }
+
 
 def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dict]]:
     """
     Scan Naver Finance research list pages, filter by target stock names,
-    and fetch detail pages for target price / opinion.
+    and fetch detail pages concurrently for target price / opinion.
     Returns {stock_code: [report_dicts]}.
     """
     print("\n📰 Scanning Naver Finance research reports...")
-    # Invert name→code mapping
     name_to_code = {v: k for k, v in kr_stock_names.items()}
     results: dict[str, list[dict]] = {code: [] for code in kr_stock_names}
 
@@ -202,6 +264,8 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
     consecutive_old = 0
     total_scanned = 0
     matched_nids: set[str] = set()
+
+    pending_items = []
 
     while True:
         url = f"https://finance.naver.com/research/company_list.naver?&page={page}"
@@ -217,7 +281,6 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
             break
 
         rows = table.find_all("tr")
-        page_has_target = False
         all_old = True
 
         for row in rows:
@@ -228,7 +291,6 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
             stock_name = cols[0].get_text(strip=True)
             date_text = cols[4].get_text(strip=True)
 
-            # Parse date (format: YY.MM.DD)
             try:
                 report_date = datetime.strptime(date_text, "%y.%m.%d")
             except ValueError:
@@ -247,7 +309,6 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
             title_a = cols[1].find("a")
             if not title_a:
                 continue
-            title = title_a.get_text(strip=True)
             link = title_a.get("href", "")
             nid_match = re.search(r"nid=(\d+)", link)
             nid = nid_match.group(1) if nid_match else None
@@ -256,15 +317,13 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
             matched_nids.add(nid)
 
             broker = cols[2].get_text(strip=True)
-            page_has_target = True
             total_scanned += 1
 
-            results[code].append({
+            pending_items.append({
+                "code": code,
                 "nid": nid,
                 "date": report_date.strftime("%Y-%m-%d"),
                 "firm": broker,
-                "title": title,
-                "stock_name": stock_name,
             })
 
         if all_old:
@@ -283,46 +342,21 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
         time.sleep(NAVER_LIST_DELAY)
 
     print(f"  ✅ List scan done: {total_scanned} matched reports across {page} pages")
+    print(f"  🚀 Fetching {len(pending_items)} detail pages in parallel (10 threads)...")
 
-    # Fetch detail pages for target prices
     detail_count = 0
-    for code, reports in results.items():
-        for report in reports:
-            nid = report.pop("nid", None)
-            if not nid:
-                continue
-            detail_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}"
-            try:
-                html = naver_request(detail_url)
-                soup = BeautifulSoup(html, "html.parser")
-                view_info = soup.find("div", class_="view_info_1")
-                if view_info:
-                    money_el = view_info.find("em", class_="money")
-                    opinion_el = view_info.find("em", class_="coment")
-                    report["target_price"] = safe_float(
-                        money_el.get_text(strip=True) if money_el else None
-                    )
-                    report["grade"] = opinion_el.get_text(strip=True) if opinion_el else ""
-                else:
-                    report["target_price"] = None
-                    report["grade"] = ""
-            except Exception:
-                report["target_price"] = None
-                report["grade"] = ""
-
-            report["analyst"] = ""
-            report["prior_target"] = None
-            report["action"] = ""
-            report["source"] = "naver"
-            report.pop("stock_name", None)
-            report.pop("title", None)
-
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(fetch_naver_detail, item) for item in pending_items]
+        for future in as_completed(futures):
+            res = future.result()
+            code = res.pop("code", None)
+            if code and code in results:
+                results[code].append(res)
             detail_count += 1
-            if detail_count % 50 == 0:
-                print(f"  📋 Fetched {detail_count} detail pages...")
-            time.sleep(NAVER_DETAIL_DELAY)
+            if detail_count % 100 == 0:
+                print(f"  📋 Fetched {detail_count} / {len(pending_items)} detail pages...")
 
-    print(f"  ✅ Detail pages done: {detail_count} fetched")
+    print(f"  ✅ Multithreaded detail fetching done: {detail_count} fetched")
     return results
 
 # ---------------------------------------------------------------------------
@@ -385,7 +419,6 @@ def merge_kr_reports(naver: list[dict], hankyung: list[dict]) -> list[dict]:
     """Merge Naver and Hankyung reports, deduplicate by (date, firm)."""
     seen = set()
     merged = []
-    # Prefer Hankyung (has analyst name), then Naver
     for r in hankyung + naver:
         key = (r["date"], r["firm"])
         if key not in seen:
@@ -399,7 +432,7 @@ def merge_kr_reports(naver: list[dict], hankyung: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def compute_bias(reports: list[dict], price_history: list[dict], current_price: float):
-    """Add realized_bias_pct and current_bias_pct to each report in‑place."""
+    """Add realized_bias_pct and current_bias_pct to each report in-place."""
     for r in reports:
         tp = r.get("target_price")
         if tp is None or tp == 0:
@@ -429,7 +462,6 @@ def compute_bias(reports: list[dict], price_history: list[dict], current_price: 
         except Exception:
             r["realized_bias_pct"] = None
 
-        # Classify using current_bias_pct (fallback to realized)
         bias_val = r["current_bias_pct"] if r["current_bias_pct"] is not None else r["realized_bias_pct"]
         r["bias_category"] = classify_bias(bias_val)
 
@@ -438,7 +470,7 @@ def compute_bias(reports: list[dict], price_history: list[dict], current_price: 
 # ---------------------------------------------------------------------------
 
 def compute_firm_stats(all_stocks: dict) -> dict:
-    """Aggregate per‑firm statistics across all stocks."""
+    """Aggregate per-firm statistics across all stocks."""
     firm_data: dict[str, dict] = {}
 
     for ticker, stock_info in all_stocks.items():
@@ -471,7 +503,6 @@ def compute_firm_stats(all_stocks: dict) -> dict:
             if cb is not None:
                 fd["by_stock"][ticker]["biases"].append(cb)
 
-    # Summarize
     result = {}
     for firm, fd in firm_data.items():
         avg_cb = round(np.mean(fd["current_biases"]), 1) if fd["current_biases"] else None
@@ -499,13 +530,13 @@ def compute_firm_stats(all_stocks: dict) -> dict:
 
 def main():
     print("=" * 60)
-    print("  Stock Consensus Bias Analysis — Data Fetcher")
+    print("  Stock Consensus Bias Analysis — Data Fetcher (40 Stocks)")
     print("=" * 60)
 
     all_stocks: dict[str, dict] = {}
 
-    # ── US Stocks ──────────────────────────────────────────────
-    print("\n🇺🇸 Processing US Stocks...")
+    # ── US Stocks (20) ─────────────────────────────────────────
+    print(f"\n🇺🇸 Processing {len(US_STOCKS)} US Stocks...")
     for ticker, name in US_STOCKS.items():
         print(f"\n── {ticker} ({name}) ──")
         price_hist = fetch_price_history(ticker, period="5y")
@@ -521,8 +552,8 @@ def main():
             "analyst_reports": reports,
         }
 
-    # ── KR Stocks ──────────────────────────────────────────────
-    print("\n🇰🇷 Processing Korean Stocks...")
+    # ── KR Stocks (20) ─────────────────────────────────────────
+    print(f"\n🇰🇷 Processing {len(KR_STOCKS)} Korean Stocks...")
 
     # 3a. Fetch KR price histories
     for code, name in KR_STOCKS.items():
@@ -536,10 +567,10 @@ def main():
             "ticker": code,
             "current_price": current_price,
             "price_history": price_hist,
-            "analyst_reports": [],  # filled below
+            "analyst_reports": [],
         }
 
-    # 3b. Naver Finance scraping (bulk)
+    # 3b. Naver Finance scraping (bulk, multithreaded details)
     naver_reports = fetch_naver_kr_targets(KR_STOCKS)
 
     # 3c. Hankyung API (per stock)
@@ -549,11 +580,8 @@ def main():
         hk_reports = fetch_hankyung_kr_targets(code)
         print(f"    ✅ {len(hk_reports)} reports")
 
-        # Merge with Naver
         nv = naver_reports.get(code, [])
         merged = merge_kr_reports(nv, hk_reports)
-
-        # Filter out reports without target price
         merged = [r for r in merged if r.get("target_price") and r["target_price"] > 0]
 
         current_price = all_stocks[code]["current_price"]

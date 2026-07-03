@@ -93,6 +93,7 @@
       const pill = document.createElement('button');
       pill.className = 'stock-pill';
       pill.dataset.ticker = info.ticker;
+      pill.dataset.search = `${info.name.toLowerCase()} ${info.ticker.toLowerCase()}`;
       pill.textContent = `${info.name} (${info.ticker})`;
       pill.addEventListener('click', () => selectStock(info.ticker));
       container.appendChild(pill);
@@ -100,6 +101,18 @@
 
     usTickers.forEach(s => createPill(s, usContainer));
     krTickers.forEach(s => createPill(s, krContainer));
+
+    const stockSearchInput = document.getElementById('stock-search');
+    if (stockSearchInput && !stockSearchInput.dataset.bound) {
+      stockSearchInput.dataset.bound = 'true';
+      stockSearchInput.addEventListener('input', (e) => {
+        const query = e.target.value.trim().toLowerCase();
+        document.querySelectorAll('.stock-pill').forEach(pill => {
+          const text = pill.dataset.search || '';
+          pill.style.display = text.includes(query) ? '' : 'none';
+        });
+      });
+    }
   }
 
   function selectStock(ticker) {
