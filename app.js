@@ -229,6 +229,47 @@
     animateValue(document.getElementById('val-reports'), reports.length);
     const firms = new Set(reports.map(r => r.firm));
     document.getElementById('sub-reports').textContent = `${firms.size}개 증권사`;
+
+    // Realistic Target Price Calculation
+    const realizedBiases = reports.map(r => r.realized_bias_pct).filter(b => b != null);
+    let biasForAdj = avgBias || 0;
+    let biasTypeStr = '현재 평균 괴리율';
+
+    if (realizedBiases.length >= 5) {
+      biasForAdj = realizedBiases.reduce((a, b) => a + b, 0) / realizedBiases.length;
+      biasTypeStr = '12개월 실현 괴리율';
+    }
+
+    if (avgTarget != null && currentPrice != null && currentPrice > 0) {
+      // Adjusted Target = avgTarget / (1 + biasForAdj / 100)
+      const adjTarget = Math.round(avgTarget / (1 + (biasForAdj / 100)));
+      const upsidePct = ((adjTarget - currentPrice) / currentPrice) * 100;
+      const discountRate = ((adjTarget - avgTarget) / avgTarget) * 100;
+
+      const adjTargetEl = document.getElementById('val-adj-target');
+      if (adjTargetEl) {
+        animateValue(adjTargetEl, adjTarget, priceSuffix, pricePrefix);
+      }
+
+      const upsideEl = document.getElementById('val-adj-upside');
+      if (upsideEl) {
+        upsideEl.textContent = `현재가 대비 ${upsidePct >= 0 ? '+' : ''}${upsidePct.toFixed(1)}% (현실적 기대 수익률)`;
+        upsideEl.style.color = upsidePct >= 0 ? '#4ade80' : '#ef4444';
+      }
+
+      const rawTargetEl = document.getElementById('val-raw-target');
+      if (rawTargetEl) {
+        rawTargetEl.textContent = formatPrice(Math.round(avgTarget), market);
+      }
+
+      const biasRateEl = document.getElementById('val-bias-rate');
+      if (biasRateEl) {
+        const sign = biasForAdj > 0 ? '+' : '';
+        const actionStr = discountRate < 0 ? `과대낙관 ${Math.abs(discountRate).toFixed(1)}% 할인 보정` : `보수성 ${discountRate.toFixed(1)}% 할증 보정`;
+        biasRateEl.textContent = `${biasTypeStr} ${sign}${biasForAdj.toFixed(1)}% (${actionStr})`;
+        biasRateEl.style.color = biasColor(biasForAdj);
+      }
+    }
   }
 
   // ── State for Timeline Scale Mode ──

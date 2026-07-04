@@ -108,6 +108,40 @@
       </div>
     </section>
 
+    <!-- Realistic Target Price Section -->
+    <section class="section realistic-target-section fade-in" style="--delay:.15s">
+      <div class="glass-panel realistic-card">
+        <div class="realistic-header">
+          <div class="realistic-title-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            🎯 현실적 투자 목표가 (Bias-Adjusted Target)
+          </div>
+          <div class="realistic-subtitle">증권사 시기별 편향 오차(Bias)를 수학적으로 보정한 데이터 기반 현실적 목표가</div>
+        </div>
+        <div class="realistic-grid">
+          <div class="realistic-main-box">
+            <span class="realistic-label">현실적 목표가 (추천 투자 목표)</span>
+            <div class="realistic-price" id="val-adj-target">—</div>
+            <div class="realistic-upside" id="val-adj-upside">—</div>
+          </div>
+          <div class="realistic-details">
+            <div class="detail-row">
+              <span class="detail-label">증권사 단순 평균 목표가:</span>
+              <span class="detail-val" id="val-raw-target">—</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">역대 편향 보정률 (Bias):</span>
+              <span class="detail-val" id="val-bias-rate">—</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">보정 산식:</span>
+              <span class="detail-val" id="val-bias-formula">현실적 목표가 = 단순 평균 목표가 ÷ (1 + 편향율)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Chart 1: Price + Target Timeline -->
     <section class="section fade-in" style="--delay:.2s">
       <div class="section-header">
