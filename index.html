@@ -114,30 +114,73 @@
         <div class="realistic-header">
           <div class="realistic-title-badge">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            🎯 현실적 투자 목표가 (Bias-Adjusted Target)
+            🎯 현실적 투자 목표가 분석 (증권사별 편향 보정 모델)
           </div>
-          <div class="realistic-subtitle">증권사 시기별 편향 오차(Bias)를 수학적으로 보정한 데이터 기반 현실적 목표가</div>
+          <div class="realistic-subtitle">증권사별 고유 편향 오차(Bias)를 개별 반영하여 산출한 4대 통계 (최대 / 최소 / 중앙값 / 평균값)</div>
         </div>
-        <div class="realistic-grid">
-          <div class="realistic-main-box">
-            <span class="realistic-label">현실적 목표가 (추천 투자 목표)</span>
-            <div class="realistic-price" id="val-adj-target">—</div>
-            <div class="realistic-upside" id="val-adj-upside">—</div>
+
+        <div class="realistic-stats-columns">
+          <!-- Column 1: Raw Analyst Target Stats -->
+          <div class="stats-group raw-stats-group">
+            <div class="stats-group-title">
+              <span class="badge badge-raw">1. 증권사 단순 제시 목표가</span>
+            </div>
+            <div class="stats-card-grid">
+              <div class="stat-box">
+                <span class="stat-box-label">최대값 (Max)</span>
+                <span class="stat-box-val" id="raw-stat-max">—</span>
+                <span class="stat-box-sub" id="raw-sub-max"></span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-box-label">최소값 (Min)</span>
+                <span class="stat-box-val" id="raw-stat-min">—</span>
+                <span class="stat-box-sub" id="raw-sub-min"></span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-box-label">중앙값 (Median)</span>
+                <span class="stat-box-val" id="raw-stat-med">—</span>
+                <span class="stat-box-sub" id="raw-sub-med"></span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-box-label">평균값 (Mean)</span>
+                <span class="stat-box-val" id="raw-stat-avg">—</span>
+                <span class="stat-box-sub" id="raw-sub-avg"></span>
+              </div>
+            </div>
           </div>
-          <div class="realistic-details">
-            <div class="detail-row">
-              <span class="detail-label">증권사 단순 평균 목표가:</span>
-              <span class="detail-val" id="val-raw-target">—</span>
+
+          <!-- Column 2: Firm-Adjusted Realistic Target Stats -->
+          <div class="stats-group adj-stats-group">
+            <div class="stats-group-title">
+              <span class="badge badge-adj">2. 🎯 현실적 투자 목표가 (증권사별 편향 보정)</span>
             </div>
-            <div class="detail-row">
-              <span class="detail-label">역대 편향 보정률 (Bias):</span>
-              <span class="detail-val" id="val-bias-rate">—</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">보정 산식:</span>
-              <span class="detail-val" id="val-bias-formula">현실적 목표가 = 단순 평균 목표가 ÷ (1 + 편향율)</span>
+            <div class="stats-card-grid">
+              <div class="stat-box highlight-box">
+                <span class="stat-box-label">현실적 최대값 (Adj. Max)</span>
+                <span class="stat-box-val val-green" id="adj-stat-max">—</span>
+                <span class="stat-box-sub" id="adj-sub-max"></span>
+              </div>
+              <div class="stat-box highlight-box">
+                <span class="stat-box-label">현실적 최소값 (Adj. Min)</span>
+                <span class="stat-box-val val-blue" id="adj-stat-min">—</span>
+                <span class="stat-box-sub" id="adj-sub-min"></span>
+              </div>
+              <div class="stat-box highlight-box accent-border">
+                <span class="stat-box-label">현실적 중앙값 (Adj. Median)</span>
+                <span class="stat-box-val val-yellow" id="adj-stat-med">—</span>
+                <span class="stat-box-sub" id="adj-sub-med"></span>
+              </div>
+              <div class="stat-box highlight-box main-target-border">
+                <span class="stat-box-label">현실적 평균값 (Adj. Mean) ⭐</span>
+                <span class="stat-box-val val-hero" id="adj-stat-avg">—</span>
+                <span class="stat-box-sub" id="adj-sub-avg"></span>
+              </div>
             </div>
           </div>
+        </div>
+
+        <div class="realistic-footer-note" id="realistic-footer-note">
+          * 보정 산식: 각 증권사의 역대 목표가 편향율(B_firm)을 개별 반영(T_adj = T_raw / (1 + B_firm/100))하여 현실적 4대 통계량을 산출했습니다.
         </div>
       </div>
     </section>

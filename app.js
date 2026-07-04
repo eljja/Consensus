@@ -230,45 +230,89 @@
     const firms = new Set(reports.map(r => r.firm));
     document.getElementById('sub-reports').textContent = `${firms.size}개 증권사`;
 
-    // Realistic Target Price Calculation
-    const realizedBiases = reports.map(r => r.realized_bias_pct).filter(b => b != null);
-    let biasForAdj = avgBias || 0;
-    let biasTypeStr = '현재 평균 괴리율';
+    // 4-Stat Firm-Bias Adjusted Realistic Target Statistics
+    updateRealisticTargetStats(stock);
+  }
 
-    if (realizedBiases.length >= 5) {
-      biasForAdj = realizedBiases.reduce((a, b) => a + b, 0) / realizedBiases.length;
-      biasTypeStr = '12개월 실현 괴리율';
-    }
+  function updateRealisticTargetStats(stock) {
+    if (!stock) return;
+    const market = stock.market;
+    const reports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+    const currentPrice = stock.current_price;
+    if (!reports.length || !currentPrice) return;
 
-    if (avgTarget != null && currentPrice != null && currentPrice > 0) {
-      // Adjusted Target = avgTarget / (1 + biasForAdj / 100)
-      const adjTarget = Math.round(avgTarget / (1 + (biasForAdj / 100)));
-      const upsidePct = ((adjTarget - currentPrice) / currentPrice) * 100;
-      const discountRate = ((adjTarget - avgTarget) / avgTarget) * 100;
+    // Helper math function for statistics
+    const calcStats = (vals) => {
+      const sorted = [...vals].sort((a, b) => a - b);
+      const min = sorted[0];
+      const max = sorted[sorted.length - 1];
+      const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      return { min, max, median, mean };
+    };
 
-      const adjTargetEl = document.getElementById('val-adj-target');
-      if (adjTargetEl) {
-        animateValue(adjTargetEl, adjTarget, priceSuffix, pricePrefix);
+    // 1. Raw Targets statistics
+    const rawVals = reports.map(r => r.target_price);
+    const rawStats = calcStats(rawVals);
+
+    // 2. Firm-specific historical bias lookup
+    const firmBiasMap = {};
+    reports.forEach(r => {
+      if (firmBiasMap[r.firm] === undefined) {
+        const firmStat = DATA.firm_stats ? DATA.firm_stats[r.firm] : null;
+        let bias = 0;
+        if (firmStat && firmStat.avg_realized_bias_pct != null) {
+          bias = firmStat.avg_realized_bias_pct;
+        } else if (firmStat && firmStat.avg_current_bias_pct != null) {
+          bias = firmStat.avg_current_bias_pct;
+        } else if (r.realized_bias_pct != null) {
+          bias = r.realized_bias_pct;
+        } else if (r.current_bias_pct != null) {
+          bias = r.current_bias_pct;
+        }
+        firmBiasMap[r.firm] = bias;
       }
+    });
 
-      const upsideEl = document.getElementById('val-adj-upside');
-      if (upsideEl) {
-        upsideEl.textContent = `현재가 대비 ${upsidePct >= 0 ? '+' : ''}${upsidePct.toFixed(1)}% (현실적 기대 수익률)`;
-        upsideEl.style.color = upsidePct >= 0 ? '#4ade80' : '#ef4444';
-      }
+    // 3. Compute firm-bias adjusted target for each report
+    const adjVals = reports.map(r => {
+      const b = firmBiasMap[r.firm] || 0;
+      return r.target_price / (1 + (b / 100));
+    });
+    const adjStats = calcStats(adjVals);
 
-      const rawTargetEl = document.getElementById('val-raw-target');
-      if (rawTargetEl) {
-        rawTargetEl.textContent = formatPrice(Math.round(avgTarget), market);
-      }
+    // DOM helper formatters
+    const priceSuffix = market === 'KR' ? '원' : '';
+    const pricePrefix = market === 'KR' ? '' : '$';
 
-      const biasRateEl = document.getElementById('val-bias-rate');
-      if (biasRateEl) {
-        const sign = biasForAdj > 0 ? '+' : '';
-        const actionStr = discountRate < 0 ? `과대낙관 ${Math.abs(discountRate).toFixed(1)}% 할인 보정` : `보수성 ${discountRate.toFixed(1)}% 할증 보정`;
-        biasRateEl.textContent = `${biasTypeStr} ${sign}${biasForAdj.toFixed(1)}% (${actionStr})`;
-        biasRateEl.style.color = biasColor(biasForAdj);
-      }
+    const renderStatBox = (valId, subId, val) => {
+      const valEl = document.getElementById(valId);
+      const subEl = document.getElementById(subId);
+      if (!valEl || !subEl) return;
+
+      animateValue(valEl, Math.round(val), priceSuffix, pricePrefix);
+      const upside = ((val - currentPrice) / currentPrice) * 100;
+      const sign = upside >= 0 ? '+' : '';
+      subEl.textContent = `현재가 대비 ${sign}${upside.toFixed(1)}%`;
+      subEl.style.color = upside >= 0 ? '#4ade80' : '#ef4444';
+    };
+
+    // Render Raw Stats
+    renderStatBox('raw-stat-max', 'raw-sub-max', rawStats.max);
+    renderStatBox('raw-stat-min', 'raw-sub-min', rawStats.min);
+    renderStatBox('raw-stat-med', 'raw-sub-med', rawStats.median);
+    renderStatBox('raw-stat-avg', 'raw-sub-avg', rawStats.mean);
+
+    // Render Adjusted Stats
+    renderStatBox('adj-stat-max', 'adj-sub-max', adjStats.max);
+    renderStatBox('adj-stat-min', 'adj-sub-min', adjStats.min);
+    renderStatBox('adj-stat-med', 'adj-sub-med', adjStats.median);
+    renderStatBox('adj-stat-avg', 'adj-sub-avg', adjStats.mean);
+
+    const noteEl = document.getElementById('realistic-footer-note');
+    if (noteEl) {
+      noteEl.textContent = `* 총 ${reports.length}개 리포트 / ${Object.keys(firmBiasMap).length}개 증권사의 역대 편향 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.`;
     }
   }
 
