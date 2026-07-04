@@ -385,9 +385,10 @@
       const data = allStocks.map((ticker, i) => {
         const byStock = stats.by_stock || {};
         const entry = byStock[ticker];
+        const hasBias = entry && entry.avg_bias != null;
         return {
           x: DATA.stocks[ticker].name,
-          y: entry ? parseFloat(entry.avg_bias.toFixed(1)) : null
+          y: hasBias ? parseFloat(entry.avg_bias.toFixed(1)) : null
         };
       });
       return { name: firm, data };
@@ -711,24 +712,29 @@
         `데이터 생성일: ${d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`;
     }
 
-    buildStockPills();
-    buildTableData();
-    initTableSort();
-    initTableSearch();
+    try {
+      buildStockPills();
+      buildTableData();
+      initTableSort();
+      initTableSearch();
 
-    // Select first stock
-    const firstTicker = Object.keys(DATA.stocks)[0];
-    if (firstTicker) selectStock(firstTicker);
+      // Select first stock
+      const firstTicker = Object.keys(DATA.stocks)[0];
+      if (firstTicker) selectStock(firstTicker);
 
-    // Global charts
-    renderHeatmap();
-    renderAccuracyTrend();
-    renderTable();
-
-    // Hide loader
-    setTimeout(() => {
-      document.getElementById('loading-overlay').classList.add('hidden');
-    }, 400);
+      // Global charts
+      renderHeatmap();
+      renderAccuracyTrend();
+      renderTable();
+    } catch (renderErr) {
+      console.error('Error rendering dashboard components:', renderErr);
+    } finally {
+      // Hide loader guaranteed
+      setTimeout(() => {
+        const loader = document.getElementById('loading-overlay');
+        if (loader) loader.classList.add('hidden');
+      }, 400);
+    }
   }
 
   // Trigger intersection-based fade-in
