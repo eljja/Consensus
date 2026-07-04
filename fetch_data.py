@@ -155,7 +155,7 @@ def naver_request(url: str) -> str:
 # 1. Fetch actual price histories
 # ---------------------------------------------------------------------------
 
-def fetch_price_history(ticker: str, period: str = "5y") -> list[dict]:
+def fetch_price_history(ticker: str, period: str = "10y") -> list[dict]:
     """Return list of {date, close} dicts."""
     print(f"  📈 Fetching price history for {ticker}...")
     t = yf.Ticker(ticker)
@@ -560,7 +560,7 @@ def main():
     print(f"\n🇺🇸 Processing {len(US_STOCKS)} US Stocks...")
     for ticker, name in US_STOCKS.items():
         print(f"\n── {ticker} ({name}) ──")
-        price_hist = fetch_price_history(ticker, period="5y")
+        price_hist = fetch_price_history(ticker, period="10y")
         reports = fetch_us_analyst_targets(ticker)
         current_price = price_hist[-1]["close"] if price_hist else 0
         compute_bias(reports, price_hist, current_price)
@@ -580,7 +580,7 @@ def main():
     for code, name in KR_STOCKS.items():
         yf_ticker = f"{code}.KS"
         print(f"\n── {code} ({name}) ──")
-        price_hist = fetch_price_history(yf_ticker, period="5y")
+        price_hist = fetch_price_history(yf_ticker, period="10y")
         current_price = price_hist[-1]["close"] if price_hist else 0
         all_stocks[code] = {
             "name": name,
