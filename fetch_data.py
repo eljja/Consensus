@@ -102,6 +102,8 @@ OUTPUT_DIR = Path(__file__).resolve().parent
 # Hankyung API auth token (public, embedded in their JS bundles)
 HANKYUNG_TOKEN = "Bearer 0ZdNlr7LrQoawewqweq78k6usasBsqhqSIaUarSTf8mxnHuQVh9CvKAfpUy94LhBmZMg"
 
+import math
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -122,9 +124,25 @@ def safe_float(val) -> float | None:
     if val is None or val == "" or val == "N/A":
         return None
     try:
-        return float(str(val).replace(",", ""))
+        f = float(str(val).replace(",", ""))
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
     except (ValueError, TypeError):
         return None
+
+
+def sanitize_nan(obj):
+    """Recursively convert float NaN/Infinity to None for strict JSON validity."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_nan(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_nan(v) for v in obj]
+    return obj
 
 
 def naver_request(url: str) -> str:
@@ -151,9 +169,12 @@ def fetch_price_history(ticker: str, period: str = "5y") -> list[dict]:
         return []
     records = []
     for dt, row in hist.iterrows():
+        c = row.get("Close")
+        if c is None or pd.isna(c) or math.isnan(float(c)):
+            continue
         records.append({
             "date": dt.strftime("%Y-%m-%d"),
-            "close": round(float(row["Close"]), 2),
+            "close": round(float(c), 2),
         })
     return records
 
@@ -603,9 +624,10 @@ def main():
         "stocks": all_stocks,
         "firm_stats": firm_stats,
     }
+    output = sanitize_nan(output)
     output_path = OUTPUT_DIR / "data.json"
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=None)
+        json.dump(output, f, ensure_ascii=False, indent=None, allow_nan=False)
 
     # Print summary
     total_reports = sum(len(s["analyst_reports"]) for s in all_stocks.values())
