@@ -70,6 +70,53 @@
     requestAnimationFrame(step);
   }
 
+  // ── Stock Market Cap Ordering ──
+  const KR_ORDER = [
+    '005930', // 삼성전자 (#1)
+    '000660', // SK하이닉스 (#2)
+    '373220', // LG에너지솔루션
+    '207940', // 삼성바이오로직스
+    '005380', // 현대차
+    '000270', // 기아
+    '068270', // 셀트리온
+    '105560', // KB금융
+    '055550', // 신한지주
+    '005490', // POSCO홀딩스
+    '035420', // NAVER
+    '012330', // 현대모비스
+    '006400', // 삼성SDI
+    '051910', // LG화학
+    '028260', // 삼성물산
+    '035720', // 카카오
+    '032830', // 삼성생명
+    '000810', // 삼성화재
+    '015760', // 한국전력
+    '034020', // 두산에너빌리티
+  ];
+
+  const US_ORDER = [
+    'NVDA',  // NVIDIA (#1)
+    'AAPL',  // Apple
+    'MSFT',  // Microsoft
+    'AMZN',  // Amazon
+    'GOOGL', // Alphabet
+    'META',  // Meta
+    'AVGO',  // Broadcom
+    'TSLA',  // Tesla
+    'LLY',   // Eli Lilly
+    'WMT',   // Walmart
+    'JPM',   // JPMorgan Chase
+    'V',     // Visa
+    'MA',    // Mastercard
+    'ORCL',  // Oracle
+    'COST',  // Costco
+    'NFLX',  // Netflix
+    'AMD',   // Advanced Micro Devices
+    'PEP',   // PepsiCo
+    'KO',    // Coca-Cola
+    'DIS',   // Walt Disney
+  ];
+
   // ── Build Stock Pills ──
   function buildStockPills() {
     const usContainer = document.getElementById('pills-us');
@@ -86,8 +133,19 @@
       else krTickers.push(info);
     }
 
-    usTickers.sort((a, b) => a.ticker.localeCompare(b.ticker));
-    krTickers.sort((a, b) => a.ticker.localeCompare(b.ticker));
+    usTickers.sort((a, b) => {
+      const idxA = US_ORDER.indexOf(a.ticker);
+      const idxB = US_ORDER.indexOf(b.ticker);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      return a.ticker.localeCompare(b.ticker);
+    });
+
+    krTickers.sort((a, b) => {
+      const idxA = KR_ORDER.indexOf(a.ticker);
+      const idxB = KR_ORDER.indexOf(b.ticker);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      return a.name.localeCompare(b.name);
+    });
 
     const createPill = (info, container) => {
       const pill = document.createElement('button');
@@ -204,7 +262,9 @@
 
     let series = [];
     let yaxisOpts = {};
+    const scatterSeries = [];
     const scatterColors = [];
+    let colorIdx = 0;
 
     if (isPct) {
       // Percentage Bias % mode over time
@@ -227,16 +287,14 @@
         });
       });
 
-      series = [
-        { name: '기준 (현재가)', type: 'line', data: priceData }
-      ];
-
-      let colorIdx = 0;
       for (const [firm, pts] of Object.entries(firmMap)) {
-        series.push({ name: firm, type: 'scatter', data: pts });
+        scatterSeries.push({ name: firm, type: 'scatter', data: pts });
         scatterColors.push(FIRM_COLORS[colorIdx % FIRM_COLORS.length]);
         colorIdx++;
       }
+
+      const priceSeries = { name: '기준 (현재가)', type: 'line', data: priceData };
+      series = [...scatterSeries, priceSeries];
 
       yaxisOpts = {
         labels: {
@@ -266,16 +324,14 @@
         });
       });
 
-      series = [
-        { name: '주가', type: 'line', data: priceData }
-      ];
-
-      let colorIdx = 0;
       for (const [firm, pts] of Object.entries(firmMap)) {
-        series.push({ name: firm, type: 'scatter', data: pts });
+        scatterSeries.push({ name: firm, type: 'scatter', data: pts });
         scatterColors.push(FIRM_COLORS[colorIdx % FIRM_COLORS.length]);
         colorIdx++;
       }
+
+      const priceSeries = { name: '주가', type: 'line', data: priceData };
+      series = [...scatterSeries, priceSeries];
 
       yaxisOpts = {
         logarithmic: isLog,
@@ -294,7 +350,12 @@
       };
     }
 
-    const firmCount = series.length - 1;
+    const firmCount = scatterSeries.length;
+    // Price line series is placed LAST so SVG draws it ON TOP of all scatter dots!
+    const chartColors = [...scatterColors, '#6366f1'];
+    const strokeWidths = [...Array(firmCount).fill(0), 3.5];
+    const markerSizes = [...Array(firmCount).fill(3.8), 0]; // 3.8 = 60% of original size 6
+    const opacities = [...Array(firmCount).fill(0.85), 1];
 
     const opts = {
       series,
@@ -304,16 +365,16 @@
         toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true } },
         animations: { enabled: true, easing: 'easeinout', speed: 800 },
       },
-      colors: ['#6366f1', ...scatterColors],
-      stroke: { width: [3, ...Array(firmCount).fill(0)], curve: 'smooth' },
+      colors: chartColors,
+      stroke: { width: strokeWidths, curve: 'smooth' },
       markers: {
-        size: [0, ...Array(firmCount).fill(6)],
-        strokeWidth: 2, strokeColors: '#0a0a1a',
-        hover: { sizeOffset: 3 }
+        size: markerSizes,
+        strokeWidth: 0, // No border stroke around scatter dots!
+        hover: { sizeOffset: 2 }
       },
       fill: {
         type: 'solid',
-        opacity: [1, ...Array(firmCount).fill(0.85)]
+        opacity: opacities
       },
       xaxis: {
         type: 'datetime',
@@ -332,9 +393,10 @@
         theme: 'dark',
         shared: false,
         custom: function({ series: s, seriesIndex, dataPointIndex, w }) {
+          const isLineSeries = seriesIndex === series.length - 1;
           const point = w.config.series[seriesIndex].data[dataPointIndex];
           if (!point) return '';
-          if (seriesIndex === 0) {
+          if (isLineSeries) {
             return `<div style="padding:10px 14px;font-size:12px;">
               <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${new Date(point.x).toLocaleDateString('ko-KR')}</div>
               <div style="font-weight:700;">${isPct ? '현재가 기준 (0%)' : '주가: ' + formatPrice(point.y, stock.market)}</div>
@@ -800,9 +862,9 @@
       initTableSort();
       initTableSearch();
 
-      // Select first stock
-      const firstTicker = Object.keys(DATA.stocks)[0];
-      if (firstTicker) selectStock(firstTicker);
+      // Select 삼성전자 (005930) as default stock
+      const defaultTicker = DATA.stocks['005930'] ? '005930' : Object.keys(DATA.stocks)[0];
+      if (defaultTicker) selectStock(defaultTicker);
 
       // Global charts
       renderHeatmap();
