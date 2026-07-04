@@ -181,20 +181,56 @@
     updateDashboard();
   }
 
+  // Helper to extract active recent target reports (ONLY the latest 1 report per firm issued within 90 days max)
+  function getActiveRecentReports(stock) {
+    const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+    if (!allReports.length) return [];
+
+    // Find the latest report date in the dataset for this stock
+    let maxTime = 0;
+    allReports.forEach(r => {
+      const t = new Date(r.date).getTime();
+      if (!isNaN(t) && t > maxTime) maxTime = t;
+    });
+    if (!maxTime) return [];
+
+    // Cutoff: 90 days (3 months)
+    const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+    let cutoff = maxTime - ninetyDaysMs;
+    let recent = allReports.filter(r => new Date(r.date).getTime() >= cutoff);
+
+    // Fallback: if fewer than 3 reports in 90 days, expand window to 180 days (6 months)
+    if (recent.length < 3) {
+      cutoff = maxTime - (180 * 24 * 60 * 60 * 1000);
+      recent = allReports.filter(r => new Date(r.date).getTime() >= cutoff);
+    }
+
+    // Deduplicate by firm: pick ONLY the single latest report for each firm
+    const firmLatestMap = {};
+    recent.forEach(r => {
+      const rTime = new Date(r.date).getTime();
+      if (!firmLatestMap[r.firm] || rTime > new Date(firmLatestMap[r.firm].date).getTime()) {
+        firmLatestMap[r.firm] = r;
+      }
+    });
+
+    return Object.values(firmLatestMap);
+  }
+
   // ── Update Summary Cards ──
   function updateCards() {
     const stock = DATA.stocks[selectedTicker];
     if (!stock) return;
     const market = stock.market;
-    const reports = stock.analyst_reports || [];
+    const activeReports = getActiveRecentReports(stock);
     const currentPrice = stock.current_price;
 
-    // Average target
-    const targets = reports.map(r => r.target_price).filter(t => t != null);
+    // Average target of active recent reports (most recent 1 per firm within 90d)
+    const targets = activeReports.map(r => r.target_price);
     const avgTarget = targets.length ? targets.reduce((a, b) => a + b, 0) / targets.length : null;
 
-    // Average bias
-    const biases = reports.map(r => r.current_bias_pct).filter(b => b != null);
+    // Average bias of active recent reports
+    const biases = activeReports.map(r => r.current_bias_pct).filter(b => b != null);
     const avgBias = biases.length ? biases.reduce((a, b) => a + b, 0) / biases.length : null;
 
     // Price
@@ -226,9 +262,8 @@
     }
 
     // Reports
-    animateValue(document.getElementById('val-reports'), reports.length);
-    const firms = new Set(reports.map(r => r.firm));
-    document.getElementById('sub-reports').textContent = `${firms.size}개 증권사`;
+    animateValue(document.getElementById('val-reports'), activeReports.length);
+    document.getElementById('sub-reports').textContent = `최근 3개월 ${activeReports.length}개 증권사 최신`;
 
     // 4-Stat Firm-Bias Adjusted Realistic Target Statistics
     updateRealisticTargetStats(stock);
@@ -237,9 +272,9 @@
   function updateRealisticTargetStats(stock) {
     if (!stock) return;
     const market = stock.market;
-    const reports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+    const activeReports = getActiveRecentReports(stock);
     const currentPrice = stock.current_price;
-    if (!reports.length || !currentPrice) return;
+    if (!activeReports.length || !currentPrice) return;
 
     // Helper math function for statistics
     const calcStats = (vals) => {
@@ -252,13 +287,13 @@
       return { min, max, median, mean };
     };
 
-    // 1. Raw Targets statistics
-    const rawVals = reports.map(r => r.target_price);
+    // 1. Raw Active Targets statistics (most recent per firm within 90 days)
+    const rawVals = activeReports.map(r => r.target_price);
     const rawStats = calcStats(rawVals);
 
-    // 2. Firm-specific historical bias lookup
+    // 2. Firm-specific historical bias lookup (computed across full 10-year history for each firm)
     const firmBiasMap = {};
-    reports.forEach(r => {
+    activeReports.forEach(r => {
       if (firmBiasMap[r.firm] === undefined) {
         const firmStat = DATA.firm_stats ? DATA.firm_stats[r.firm] : null;
         let bias = 0;
@@ -275,8 +310,8 @@
       }
     });
 
-    // 3. Compute firm-bias adjusted target for each report
-    const adjVals = reports.map(r => {
+    // 3. Compute firm-bias adjusted target for each active report
+    const adjVals = activeReports.map(r => {
       const b = firmBiasMap[r.firm] || 0;
       return r.target_price / (1 + (b / 100));
     });
@@ -312,7 +347,7 @@
 
     const noteEl = document.getElementById('realistic-footer-note');
     if (noteEl) {
-      noteEl.textContent = `* 총 ${reports.length}개 리포트 / ${Object.keys(firmBiasMap).length}개 증권사의 역대 편향 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.`;
+      noteEl.textContent = `* 최근 3개월 이내 ${activeReports.length}개 증권사별 최신 리포트 1건만을 추출한 뒤, 각 증권사의 역대 편향 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.`;
     }
   }
 
