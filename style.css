@@ -73,7 +73,21 @@ body{
 /* ===== SECTIONS ===== */
 .section{margin-bottom:28px}
 .section-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.section-title{font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
+.section-title{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.section-desc{font-size:.78rem;color:var(--text-tertiary)}
+
+/* ===== SCALE TOGGLE GROUP ===== */
+.scale-toggle-group{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.05);padding:3px;border-radius:99px;border:1px solid var(--glass-border)}
+.scale-btn{
+  padding:5px 12px;border-radius:99px;border:1px solid transparent;background:transparent;
+  color:var(--text-tertiary);font-size:.75rem;font-weight:600;cursor:pointer;
+  transition:all .2s ease;white-space:nowrap;
+}
+.scale-btn:hover{color:var(--text-primary);background:rgba(255,255,255,.06)}
+.scale-btn.active{
+  background:var(--primary-soft);color:#fff;border-color:var(--primary);
+  box-shadow:0 0 14px rgba(99,102,241,.3);
+}
 .section-title svg{color:var(--primary);flex-shrink:0}
 .section-desc{font-size:.78rem;color:var(--text-tertiary)}
 

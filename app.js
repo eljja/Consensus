@@ -173,73 +173,154 @@
     document.getElementById('sub-reports').textContent = `${firms.size}개 증권사`;
   }
 
+  // ── State for Timeline Scale Mode ──
+  let currentScaleMode = 'linear';
+
+  function initScaleToggles() {
+    const container = document.getElementById('timeline-scale-toggles');
+    if (!container || container.dataset.bound) return;
+    container.dataset.bound = 'true';
+    container.querySelectorAll('.scale-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const mode = e.currentTarget.dataset.scale;
+        if (!mode || mode === currentScaleMode) return;
+        currentScaleMode = mode;
+        container.querySelectorAll('.scale-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.scale === mode);
+        });
+        renderTimeline();
+      });
+    });
+  }
+
   // ── Chart 1: Timeline ──
   function renderTimeline() {
     const stock = DATA.stocks[selectedTicker];
     if (!stock) return;
 
-    const priceData = (stock.price_history || []).map(p => ({
-      x: new Date(p.date).getTime(), y: p.close
-    }));
+    const isKR = stock.market === 'KR';
+    const isPct = currentScaleMode === 'pct';
+    const isLog = currentScaleMode === 'log';
 
-    // Group analyst reports by firm
-    const firmMap = {};
-    (stock.analyst_reports || []).forEach(r => {
-      if (!firmMap[r.firm]) firmMap[r.firm] = [];
-      firmMap[r.firm].push({
-        x: new Date(r.date).getTime(),
-        y: r.target_price,
-        firm: r.firm,
-        analyst: r.analyst,
-        bias: r.current_bias_pct,
-        grade: r.grade
-      });
-    });
-
-    const series = [
-      { name: '주가', type: 'line', data: priceData }
-    ];
-
-    let colorIdx = 0;
+    let series = [];
+    let yaxisOpts = {};
     const scatterColors = [];
-    for (const [firm, pts] of Object.entries(firmMap)) {
-      series.push({ name: firm, type: 'scatter', data: pts });
-      scatterColors.push(FIRM_COLORS[colorIdx % FIRM_COLORS.length]);
-      colorIdx++;
+
+    if (isPct) {
+      // Percentage Bias % mode over time
+      const priceData = (stock.price_history || []).map(p => ({
+        x: new Date(p.date).getTime(), y: 0
+      }));
+
+      const firmMap = {};
+      (stock.analyst_reports || []).forEach(r => {
+        if (r.current_bias_pct == null) return;
+        if (!firmMap[r.firm]) firmMap[r.firm] = [];
+        firmMap[r.firm].push({
+          x: new Date(r.date).getTime(),
+          y: r.current_bias_pct,
+          firm: r.firm,
+          analyst: r.analyst,
+          target_price: r.target_price,
+          bias: r.current_bias_pct,
+          grade: r.grade
+        });
+      });
+
+      series = [
+        { name: '기준 (현재가)', type: 'line', data: priceData }
+      ];
+
+      let colorIdx = 0;
+      for (const [firm, pts] of Object.entries(firmMap)) {
+        series.push({ name: firm, type: 'scatter', data: pts });
+        scatterColors.push(FIRM_COLORS[colorIdx % FIRM_COLORS.length]);
+        colorIdx++;
+      }
+
+      yaxisOpts = {
+        labels: {
+          style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
+          formatter: v => v != null ? (v > 0 ? '+' : '') + v.toFixed(0) + '%' : ''
+        },
+        title: { text: '목표가 괴리율 (%)', style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' } }
+      };
+
+    } else {
+      // Linear or Log scale price mode
+      const priceData = (stock.price_history || []).map(p => ({
+        x: new Date(p.date).getTime(), y: p.close
+      }));
+
+      const firmMap = {};
+      (stock.analyst_reports || []).forEach(r => {
+        if (!firmMap[r.firm]) firmMap[r.firm] = [];
+        firmMap[r.firm].push({
+          x: new Date(r.date).getTime(),
+          y: r.target_price,
+          firm: r.firm,
+          analyst: r.analyst,
+          target_price: r.target_price,
+          bias: r.current_bias_pct,
+          grade: r.grade
+        });
+      });
+
+      series = [
+        { name: '주가', type: 'line', data: priceData }
+      ];
+
+      let colorIdx = 0;
+      for (const [firm, pts] of Object.entries(firmMap)) {
+        series.push({ name: firm, type: 'scatter', data: pts });
+        scatterColors.push(FIRM_COLORS[colorIdx % FIRM_COLORS.length]);
+        colorIdx++;
+      }
+
+      yaxisOpts = {
+        logarithmic: isLog,
+        logBase: 10,
+        labels: {
+          style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
+          formatter: v => {
+            if (v == null || isNaN(v)) return '';
+            return isKR ? (v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : v.toLocaleString()) : '$' + v.toFixed(0);
+          }
+        },
+        title: {
+          text: isLog ? '주가 / 목표가 (로그 축 - 비율 유지가능)' : '주가 / 목표가 (선형 축)',
+          style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
+        }
+      };
     }
 
-    const isKR = stock.market === 'KR';
+    const firmCount = series.length - 1;
 
     const opts = {
       series,
       chart: {
-        type: 'line', height: 420, background: 'transparent',
+        type: 'line', height: 440, background: 'transparent',
         fontFamily: 'Inter, sans-serif',
         toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true } },
         animations: { enabled: true, easing: 'easeinout', speed: 800 },
       },
       colors: ['#6366f1', ...scatterColors],
-      stroke: { width: [3, ...Array(Object.keys(firmMap).length).fill(0)], curve: 'smooth' },
+      stroke: { width: [3, ...Array(firmCount).fill(0)], curve: 'smooth' },
       markers: {
-        size: [0, ...Array(Object.keys(firmMap).length).fill(6)],
+        size: [0, ...Array(firmCount).fill(6)],
         strokeWidth: 2, strokeColors: '#0a0a1a',
         hover: { sizeOffset: 3 }
       },
       fill: {
         type: 'solid',
-        opacity: [1, ...Array(Object.keys(firmMap).length).fill(0.85)]
+        opacity: [1, ...Array(firmCount).fill(0.85)]
       },
       xaxis: {
         type: 'datetime',
         labels: { style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' } },
         axisBorder: { show: false }, axisTicks: { show: false },
       },
-      yaxis: {
-        labels: {
-          style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
-          formatter: v => isKR ? (v >= 10000 ? (v/10000).toFixed(0) + '만' : v.toLocaleString()) : '$' + v.toFixed(0)
-        },
-      },
+      yaxis: yaxisOpts,
       grid: { borderColor: 'rgba(255,255,255,.06)', strokeDashArray: 4 },
       legend: {
         position: 'top', horizontalAlign: 'left',
@@ -251,19 +332,19 @@
         theme: 'dark',
         shared: false,
         custom: function({ series: s, seriesIndex, dataPointIndex, w }) {
-          const seriesName = w.config.series[seriesIndex].name;
           const point = w.config.series[seriesIndex].data[dataPointIndex];
+          if (!point) return '';
           if (seriesIndex === 0) {
             return `<div style="padding:10px 14px;font-size:12px;">
               <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${new Date(point.x).toLocaleDateString('ko-KR')}</div>
-              <div style="font-weight:700;">주가: ${formatPrice(point.y, stock.market)}</div>
+              <div style="font-weight:700;">${isPct ? '현재가 기준 (0%)' : '주가: ' + formatPrice(point.y, stock.market)}</div>
             </div>`;
           }
           return `<div style="padding:10px 14px;font-size:12px;max-width:240px;">
             <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${new Date(point.x).toLocaleDateString('ko-KR')}</div>
             <div style="font-weight:700;margin-bottom:2px;">${point.firm}</div>
             ${point.analyst ? `<div style="color:rgba(255,255,255,.5);">${point.analyst}</div>` : ''}
-            <div style="margin-top:6px;">목표가: <strong>${formatPrice(point.y, stock.market)}</strong></div>
+            <div style="margin-top:6px;">목표가: <strong>${formatPrice(point.target_price || point.y, stock.market)}</strong></div>
             ${point.grade ? `<div>등급: ${point.grade}</div>` : ''}
             ${point.bias != null ? `<div>괴리율: <span style="color:${biasColor(point.bias)}">${formatPercent(point.bias)}</span></div>` : ''}
           </div>`;
@@ -714,6 +795,7 @@
 
     try {
       buildStockPills();
+      initScaleToggles();
       buildTableData();
       initTableSort();
       initTableSearch();

@@ -115,6 +115,11 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           주가 + 목표가 타임라인
         </h2>
+        <div class="scale-toggle-group" id="timeline-scale-toggles">
+          <button class="scale-btn active" data-scale="linear">📏 선형 (Linear)</button>
+          <button class="scale-btn" data-scale="log">📊 로그 축 (Log Scale)</button>
+          <button class="scale-btn" data-scale="pct">🎯 괴리율 (%)</button>
+        </div>
       </div>
       <div class="glass-panel chart-panel">
         <div id="chart-timeline"></div>
