@@ -85,8 +85,8 @@ KR_STOCKS = {
     "034020": "두산에너빌리티",
 }
 
-# How many years of Naver Finance research pages to scan
-NAVER_SCAN_YEARS = 3
+# How many years of Naver Finance research pages to scan (10 years)
+NAVER_SCAN_YEARS = 10
 
 # Rate-limiting delays (seconds)
 NAVER_LIST_DELAY = 0.3

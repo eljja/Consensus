@@ -238,16 +238,17 @@
     const container = document.getElementById('timeline-scale-toggles');
     if (!container || container.dataset.bound) return;
     container.dataset.bound = 'true';
-    container.querySelectorAll('.scale-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const mode = e.currentTarget.dataset.scale;
-        if (!mode || mode === currentScaleMode) return;
-        currentScaleMode = mode;
-        container.querySelectorAll('.scale-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.scale === mode);
-        });
-        renderTimeline();
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('.scale-btn');
+      if (!btn) return;
+      const mode = btn.dataset.scale;
+      if (!mode || mode === currentScaleMode) return;
+
+      currentScaleMode = mode;
+      container.querySelectorAll('.scale-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.scale === mode);
       });
+      renderTimeline();
     });
   }
 
@@ -333,21 +334,47 @@
       const priceSeries = { name: '주가', type: 'line', data: priceData };
       series = [...scatterSeries, priceSeries];
 
-      yaxisOpts = {
-        logarithmic: isLog,
-        logBase: 10,
-        labels: {
-          style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
-          formatter: v => {
-            if (v == null || isNaN(v)) return '';
-            return isKR ? (v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : v.toLocaleString()) : '$' + v.toFixed(0);
+      if (isLog) {
+        const allVals = [
+          ...priceData.map(p => p.y),
+          ...Object.values(firmMap).flatMap(pts => pts.map(p => p.y))
+        ].filter(v => v != null && v > 0);
+
+        const minVal = allVals.length ? Math.max(1, Math.floor(Math.min(...allVals) * 0.9)) : 10;
+        const maxVal = allVals.length ? Math.ceil(Math.max(...allVals) * 1.1) : 100000;
+
+        yaxisOpts = {
+          logarithmic: true,
+          logBase: 10,
+          min: minVal,
+          max: maxVal,
+          labels: {
+            style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
+            formatter: v => {
+              if (v == null || isNaN(v) || v <= 0) return '';
+              return isKR ? (v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : Math.round(v).toLocaleString()) : '$' + Math.round(v);
+            }
+          },
+          title: {
+            text: '주가 / 목표가 (로그 축)',
+            style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
           }
-        },
-        title: {
-          text: isLog ? '주가 / 목표가 (로그 축 - 비율 유지가능)' : '주가 / 목표가 (선형 축)',
-          style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
-        }
-      };
+        };
+      } else {
+        yaxisOpts = {
+          labels: {
+            style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
+            formatter: v => {
+              if (v == null || isNaN(v)) return '';
+              return isKR ? (v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : v.toLocaleString()) : '$' + v.toFixed(0);
+            }
+          },
+          title: {
+            text: '주가 / 목표가 (선형 축)',
+            style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
+          }
+        };
+      }
     }
 
     const firmCount = scatterSeries.length;
@@ -360,10 +387,10 @@
     const opts = {
       series,
       chart: {
-        type: 'line', height: 440, background: 'transparent',
+        type: 'line', height: 480, background: 'transparent',
         fontFamily: 'Inter, sans-serif',
         toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true } },
-        animations: { enabled: true, easing: 'easeinout', speed: 800 },
+        animations: { enabled: true, easing: 'easeinout', speed: 600 },
       },
       colors: chartColors,
       stroke: { width: strokeWidths, curve: 'smooth' },
@@ -384,10 +411,10 @@
       yaxis: yaxisOpts,
       grid: { borderColor: 'rgba(255,255,255,.06)', strokeDashArray: 4 },
       legend: {
-        position: 'top', horizontalAlign: 'left',
-        labels: { colors: 'rgba(255,255,255,.5)' },
+        position: 'bottom', horizontalAlign: 'center',
+        labels: { colors: 'rgba(255,255,255,.6)' },
         fontSize: '11px', fontWeight: 500,
-        itemMargin: { horizontal: 8, vertical: 4 },
+        itemMargin: { horizontal: 10, vertical: 5 }
       },
       tooltip: {
         theme: 'dark',
