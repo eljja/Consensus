@@ -617,10 +617,118 @@ def main():
     firm_stats = compute_firm_stats(all_stocks)
 
     # ── Export ─────────────────────────────────────────────────
-    print("\n💾 Exporting to data.json...")
+    print("\n💾 Exporting summary.json and stocks/*.json for fast lazy-loading...")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    stocks_dir = OUTPUT_DIR / "stocks"
+    stocks_dir.mkdir(parents=True, exist_ok=True)
+
+    gen_at = datetime.now().isoformat(timespec="seconds")
+
+    # Helper for stock summary
+    summary_stocks = {}
+
+    for ticker, stock in all_stocks.items():
+        # 1. Write individual stock detail file
+        stock_detail = {
+            "ticker": ticker,
+            "name": stock["name"],
+            "market": stock["market"],
+            "current_price": stock["current_price"],
+            "price_history": stock.get("price_history", []),
+            "analyst_reports": stock.get("analyst_reports", [])
+        }
+        stock_detail = sanitize_nan(stock_detail)
+        stock_file = stocks_dir / f"{ticker}.json"
+        with open(stock_file, "w", encoding="utf-8") as f:
+            json.dump(stock_detail, f, ensure_ascii=False, indent=None, allow_nan=False)
+
+        # 2. Compute stock summary
+        valid = [r for r in stock.get("analyst_reports", []) if r.get("target_price") and r["target_price"] > 0]
+        cur_p = stock.get("current_price", 0)
+        
+        if valid and cur_p:
+            price_hist = {p["date"]: p["close"] for p in stock.get("price_history", [])}
+            sorted_dates = sorted(price_hist.keys())
+            max_hist_date = sorted_dates[-1] if sorted_dates else ""
+
+            def get_price(dt_str):
+                if dt_str in price_hist: return price_hist[dt_str]
+                past = [d for d in sorted_dates if d <= dt_str]
+                return price_hist[past[-1]] if past else None
+
+            firm_biases = {}
+            for r in valid:
+                firm = r.get("firm")
+                if not firm or not r.get("date"): continue
+                try:
+                    dt = datetime.strptime(r["date"], "%Y-%m-%d")
+                    dt1y = dt.replace(year=dt.year + 1).strftime("%Y-%m-%d")
+                    if dt1y <= max_hist_date:
+                        p1y = get_price(dt1y)
+                        if p1y and p1y > 0:
+                            b = (r["target_price"] - p1y) / p1y * 100.0
+                            if -70.0 <= b <= 200.0:
+                                if firm not in firm_biases: firm_biases[firm] = []
+                                firm_biases[firm].append(b)
+                except: pass
+
+            firm_avg_bias = {f: max(-30.0, min(50.0, sum(l)/len(l))) for f, l in firm_biases.items()}
+            max_date = max(r["date"] for r in valid)
+            recent = [r for r in valid if (datetime.strptime(max_date, "%Y-%m-%d") - datetime.strptime(r["date"], "%Y-%m-%d")).days <= 90]
+            firm_map = {}
+            for r in sorted(recent, key=lambda x: x["date"]):
+                firm_map[r["firm"]] = r
+            active = list(firm_map.values())
+
+            def calc_stats(vals):
+                sorted_v = sorted(vals)
+                mid = len(sorted_v) // 2
+                med = sorted_v[mid] if len(sorted_v) % 2 != 0 else (sorted_v[mid-1] + sorted_v[mid]) / 2.0
+                return {"min": sorted_v[0], "max": sorted_v[-1], "median": med, "mean": sum(sorted_v)/len(sorted_v)}
+
+            raw_vals = [r["target_price"] for r in active]
+            raw_stats = calc_stats(raw_vals) if raw_vals else {"min": 0, "max": 0, "median": 0, "mean": 0}
+
+            adj_vals = [r["target_price"] / (1.0 + firm_avg_bias.get(r["firm"], 15.0) / 100.0) for r in active]
+            adj_stats = calc_stats(adj_vals) if adj_vals else {"min": 0, "max": 0, "median": 0, "mean": 0}
+
+            upside_median = ((adj_stats["median"] - cur_p) / cur_p) * 100.0 if adj_stats["median"] else 0.0
+            act_cnt = len(active)
+            act_firms = len(set(r["firm"] for r in active))
+        else:
+            raw_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
+            adj_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
+            upside_median = 0.0
+            act_cnt = 0
+            act_firms = 0
+
+        summary_stocks[ticker] = {
+            "name": stock["name"],
+            "market": stock["market"],
+            "ticker": ticker,
+            "current_price": stock["current_price"],
+            "reports_count": len(stock.get("analyst_reports", [])),
+            "active_reports_count": act_cnt,
+            "active_firms_count": act_firms,
+            "raw_stats": raw_stats,
+            "adj_stats": adj_stats,
+            "realistic_median_upside": upside_median
+        }
+
+    # Write summary.json
+    summary_data = {
+        "generated_at": gen_at,
+        "stocks": summary_stocks,
+        "firm_stats": firm_stats,
+    }
+    summary_data = sanitize_nan(summary_data)
+    summary_path = OUTPUT_DIR / "summary.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary_data, f, ensure_ascii=False, indent=None, allow_nan=False)
+
+    # Backup data.json
     output = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "generated_at": gen_at,
         "stocks": all_stocks,
         "firm_stats": firm_stats,
     }
@@ -632,13 +740,13 @@ def main():
     # Print summary
     total_reports = sum(len(s["analyst_reports"]) for s in all_stocks.values())
     total_firms = len(firm_stats)
-    file_size = output_path.stat().st_size / (1024 * 1024)
+    summary_size = summary_path.stat().st_size / 1024
     print(f"\n{'=' * 60}")
     print(f"  ✅ Done!")
-    print(f"  📁 Output: {output_path}")
+    print(f"  📁 Summary: {summary_path} ({summary_size:.1f} KB)")
+    print(f"  📁 Stocks: {stocks_dir} ({len(all_stocks)} stock detail JSON files)")
     print(f"  📊 {total_reports} analyst reports across {len(all_stocks)} stocks")
     print(f"  🏢 {total_firms} unique firms")
-    print(f"  💾 File size: {file_size:.1f} MB")
     print(f"{'=' * 60}")
 
 

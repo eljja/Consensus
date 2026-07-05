@@ -7,6 +7,7 @@
 
   // ── State ──
   let DATA = null;
+  let STOCK_CACHE = {};
   let selectedTicker = null;
   let charts = {};
   let sortState = { key: 'date', dir: 'desc' };
@@ -51,140 +52,43 @@
     return '#3b82f6';
   }
 
-  function animateValue(el, end, suffix = '', prefix = '', duration = 600) {
+  function animateValue(el, target, suffix = '', prefix = '', duration = 600) {
+    if (!el || target == null || isNaN(target)) return;
     const start = 0;
     const startTime = performance.now();
-    const isNum = typeof end === 'number';
-    if (!isNum) { el.textContent = prefix + end + suffix; return; }
-    const step = (now) => {
-      const progress = Math.min((now - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = start + (end - start) * eased;
-      if (Math.abs(end) >= 1000) {
-        el.textContent = prefix + Math.round(current).toLocaleString('ko-KR') + suffix;
-      } else {
-        el.textContent = prefix + current.toFixed(end % 1 !== 0 ? 1 : 0) + suffix;
-      }
+    function step(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(start + (target - start) * ease);
+      el.textContent = prefix + (marketFormat(current, suffix) || current.toLocaleString()) + suffix;
       if (progress < 1) requestAnimationFrame(step);
-    };
+    }
     requestAnimationFrame(step);
   }
 
-  // ── Stock Market Cap Ordering ──
-  const KR_ORDER = [
-    '005930', // 삼성전자 (#1)
-    '000660', // SK하이닉스 (#2)
-    '373220', // LG에너지솔루션
-    '207940', // 삼성바이오로직스
-    '005380', // 현대차
-    '000270', // 기아
-    '068270', // 셀트리온
-    '105560', // KB금융
-    '055550', // 신한지주
-    '005490', // POSCO홀딩스
-    '035420', // NAVER
-    '012330', // 현대모비스
-    '006400', // 삼성SDI
-    '051910', // LG화학
-    '028260', // 삼성물산
-    '035720', // 카카오
-    '032830', // 삼성생명
-    '000810', // 삼성화재
-    '015760', // 한국전력
-    '034020', // 두산에너빌리티
-  ];
+  function marketFormat(num, suffix) {
+    if (suffix === '원') return num.toLocaleString('ko-KR');
+    return null;
+  }
 
+  // ── Stock Order ──
   const US_ORDER = [
-    'NVDA',  // NVIDIA (#1)
-    'AAPL',  // Apple
-    'MSFT',  // Microsoft
-    'AMZN',  // Amazon
-    'GOOGL', // Alphabet
-    'META',  // Meta
-    'AVGO',  // Broadcom
-    'TSLA',  // Tesla
-    'LLY',   // Eli Lilly
-    'WMT',   // Walmart
-    'JPM',   // JPMorgan Chase
-    'V',     // Visa
-    'MA',    // Mastercard
-    'ORCL',  // Oracle
-    'COST',  // Costco
-    'NFLX',  // Netflix
-    'AMD',   // Advanced Micro Devices
-    'PEP',   // PepsiCo
-    'KO',    // Coca-Cola
-    'DIS',   // Walt Disney
+    'NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'LLY', 'JPM',
+    'WMT', 'V', 'MA', 'NFLX', 'AMD', 'ORCL', 'COST', 'PEP', 'KO', 'DIS',
   ];
 
-  // Compute stock realistic median target upside % for stock selector pill color coding
-  function calculateStockRealisticMedian(stock) {
-    if (!stock || !stock.current_price) return 0;
-    const currentPrice = stock.current_price;
-    const activeReports = getActiveRecentReports(stock);
-    if (!activeReports.length) return 0;
+  const KR_ORDER = [
+    '005930', '000660', '373220', '207940', '005380', '068270', '005490', '035420', '000270', '035720',
+    '105560', '055550', '000810', '012330', '051910', '006400', '028260', '032830', '015760', '034020',
+  ];
 
-    const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
-    const priceHist = stock.price_history || [];
-    const priceMap = {};
-    priceHist.forEach(p => { priceMap[p.date] = p.close; });
-    const sortedDates = Object.keys(priceMap).sort();
-
-    const getPriceOnDate = (dtStr) => {
-      if (priceMap[dtStr]) return priceMap[dtStr];
-      let low = 0, high = sortedDates.length - 1, best = null;
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        if (sortedDates[mid] <= dtStr) {
-          best = priceMap[sortedDates[mid]];
-          low = mid + 1;
-        } else {
-          high = mid - 1;
-        }
-      }
-      return best;
-    };
-
-    const maxHistDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : '';
-    const firmBiasListMap = {};
-
-    allReports.forEach(r => {
-      if (!r.date || !r.firm) return;
-      const dt = new Date(r.date);
-      if (isNaN(dt.getTime())) return;
-
-      const dt1y = new Date(dt);
-      dt1y.setFullYear(dt1y.getFullYear() + 1);
-      const dt1yStr = dt1y.toISOString().split('T')[0];
-
-      if (dt1yStr <= maxHistDate) {
-        const p1y = getPriceOnDate(dt1yStr);
-        if (p1y && p1y > 0) {
-          const bias1y = ((r.target_price - p1y) / p1y) * 100;
-          if (bias1y >= -70 && bias1y <= 200) {
-            if (!firmBiasListMap[r.firm]) firmBiasListMap[r.firm] = [];
-            firmBiasListMap[r.firm].push(bias1y);
-          }
-        }
-      }
-    });
-
-    const firmAvgBiasMap = {};
-    for (const [firm, list] of Object.entries(firmBiasListMap)) {
-      const avg = list.reduce((a, b) => a + b, 0) / list.length;
-      firmAvgBiasMap[firm] = Math.max(-30, Math.min(50, avg));
+  // Compute stock realistic median target upside % from summary data
+  function calculateStockRealisticMedian(stockSummary) {
+    if (stockSummary && stockSummary.realistic_median_upside != null) {
+      return stockSummary.realistic_median_upside;
     }
-
-    const adjVals = activeReports.map(r => {
-      const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0;
-      return r.target_price / (1 + (b / 100));
-    }).sort((a, b) => a - b);
-
-    if (!adjVals.length) return 0;
-    const mid = Math.floor(adjVals.length / 2);
-    const median = adjVals.length % 2 !== 0 ? adjVals[mid] : (adjVals[mid - 1] + adjVals[mid]) / 2;
-
-    return ((median - currentPrice) / currentPrice) * 100;
+    return 0;
   }
 
   function getPillColorStyle(upsidePct) {
@@ -200,10 +104,9 @@
     }
 
     if (upsidePct > 0) {
-      // Red tint for stock expected to go UP (상승 예상: 빨간색, 강도에 비례)
       const intensity = Math.min(upsidePct / 40.0, 1.0);
-      const alphaBg = 0.12 + intensity * 0.28; // 0.12 ~ 0.40
-      const alphaBorder = 0.25 + intensity * 0.45; // 0.25 ~ 0.70
+      const alphaBg = 0.12 + intensity * 0.28;
+      const alphaBorder = 0.25 + intensity * 0.45;
       return {
         bg: `rgba(239, 68, 68, ${alphaBg.toFixed(2)})`,
         border: `rgba(239, 68, 68, ${alphaBorder.toFixed(2)})`,
@@ -213,10 +116,9 @@
         badge: `+${upsidePct.toFixed(1)}%`
       };
     } else {
-      // Blue tint for stock expected to go DOWN (하락 예상: 파란색, 강도에 비례)
       const intensity = Math.min(Math.abs(upsidePct) / 25.0, 1.0);
-      const alphaBg = 0.12 + intensity * 0.28; // 0.12 ~ 0.40
-      const alphaBorder = 0.25 + intensity * 0.45; // 0.25 ~ 0.70
+      const alphaBg = 0.12 + intensity * 0.28;
+      const alphaBorder = 0.25 + intensity * 0.45;
       return {
         bg: `rgba(59, 130, 246, ${alphaBg.toFixed(2)})`,
         border: `rgba(59, 130, 246, ${alphaBorder.toFixed(2)})`,
@@ -235,28 +137,12 @@
     usContainer.innerHTML = '';
     krContainer.innerHTML = '';
 
-    const stocks = DATA.stocks;
-    const usTickers = [];
-    const krTickers = [];
+    const stocks = Object.values(DATA.stocks);
+    const usStocks = stocks.filter(s => s.market === 'US');
+    const krStocks = stocks.filter(s => s.market === 'KR');
 
-    for (const [ticker, info] of Object.entries(stocks)) {
-      if (info.market === 'US') usTickers.push(info);
-      else krTickers.push(info);
-    }
-
-    usTickers.sort((a, b) => {
-      const idxA = US_ORDER.indexOf(a.ticker);
-      const idxB = US_ORDER.indexOf(b.ticker);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      return a.ticker.localeCompare(b.ticker);
-    });
-
-    krTickers.sort((a, b) => {
-      const idxA = KR_ORDER.indexOf(a.ticker);
-      const idxB = KR_ORDER.indexOf(b.ticker);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      return a.name.localeCompare(b.name);
-    });
+    usStocks.sort((a, b) => US_ORDER.indexOf(a.ticker) - US_ORDER.indexOf(b.ticker));
+    krStocks.sort((a, b) => KR_ORDER.indexOf(a.ticker) - KR_ORDER.indexOf(b.ticker));
 
     const createPill = (info, container) => {
       const pill = document.createElement('button');
@@ -270,15 +156,14 @@
       pill.style.backgroundColor = style.bg;
       pill.style.borderColor = style.border;
       pill.style.color = style.text;
-
       pill.innerHTML = `<span>${info.name} (${info.ticker})</span> <span style="font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:99px;background:${style.badgeBg};color:${style.badgeText};">${style.badge}</span>`;
 
       pill.addEventListener('click', () => selectStock(info.ticker));
       container.appendChild(pill);
     };
 
-    usTickers.forEach(s => createPill(s, usContainer));
-    krTickers.forEach(s => createPill(s, krContainer));
+    usStocks.forEach(s => createPill(s, usContainer));
+    krStocks.forEach(s => createPill(s, krContainer));
 
     const stockSearchInput = document.getElementById('stock-search');
     if (stockSearchInput && !stockSearchInput.dataset.bound) {
@@ -293,17 +178,38 @@
     }
   }
 
-  function selectStock(ticker) {
+  // On-demand stock selection
+  async function selectStock(ticker) {
     selectedTicker = ticker;
     document.querySelectorAll('.stock-pill').forEach(p => {
       p.classList.toggle('active', p.dataset.ticker === ticker);
     });
+
+    if (!STOCK_CACHE[ticker]) {
+      try {
+        const resp = await fetch(`stocks/${ticker}.json`);
+        if (!resp.ok) {
+          if (DATA.stocks[ticker] && DATA.stocks[ticker].analyst_reports) {
+            STOCK_CACHE[ticker] = DATA.stocks[ticker];
+          } else {
+            throw new Error(`Cannot load stock detail for ${ticker}`);
+          }
+        } else {
+          STOCK_CACHE[ticker] = await resp.json();
+        }
+      } catch (err) {
+        console.error(err);
+        return;
+      }
+    }
     updateDashboard();
   }
 
   // Helper to extract active recent target reports (ONLY the latest 1 report per firm issued within 90 days max)
   function getActiveRecentReports(stock) {
-    const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+    const targetStock = stock || STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
+    if (!targetStock) return [];
+    const allReports = (targetStock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
     if (!allReports.length) return [];
 
     // Find the latest report date in the dataset for this stock
@@ -339,7 +245,7 @@
 
   // ── Update Summary Cards ──
   function updateCards() {
-    const stock = DATA.stocks[selectedTicker];
+    const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (!stock) return;
     const market = stock.market;
     const activeReports = getActiveRecentReports(stock);
@@ -389,7 +295,8 @@
     updateRealisticTargetStats(stock);
   }
 
-  function updateRealisticTargetStats(stock) {
+  function updateRealisticTargetStats(stockArg) {
+    const stock = stockArg || STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (!stock) return;
     const market = stock.market;
     const activeReports = getActiveRecentReports(stock);
@@ -531,7 +438,7 @@
 
   // ── Chart 1: Timeline ──
   function renderTimeline() {
-    const stock = DATA.stocks[selectedTicker];
+    const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (!stock) return;
 
     const isKR = stock.market === 'KR';
@@ -723,9 +630,37 @@
     charts.timeline.render();
   }
 
+  // ── Reports Table ──
+  let allTableData = [];
+  let filteredData = [];
+
+  function buildTableData() {
+    allTableData = [];
+    const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
+    if (stock && stock.analyst_reports) {
+      stock.analyst_reports.forEach(r => {
+        allTableData.push({
+          date: r.date,
+          stock: stock.name,
+          ticker: selectedTicker,
+          market: stock.market,
+          firm: r.firm,
+          analyst: r.analyst || '—',
+          target: r.target_price,
+          bias: r.current_bias_pct,
+          grade: r.grade || '',
+          action: r.action || ''
+        });
+      });
+    }
+    filteredData = [...allTableData];
+    applySort();
+    renderTable();
+  }
+
   // ── Chart 2: Bias Ranking ──
   function renderBiasRanking() {
-    const stock = DATA.stocks[selectedTicker];
+    const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (!stock) return;
 
     const firmBias = {};
@@ -1132,14 +1067,17 @@
     updateCards();
     renderTimeline();
     renderBiasRanking();
-    // Heatmap and accuracy are global, not per-stock — only render once
+    buildTableData();
   }
 
   // ── Initialization ──
   async function init() {
     try {
-      const resp = await fetch('data.json');
-      if (!resp.ok) throw new Error('데이터를 불러올 수 없습니다.');
+      let resp = await fetch('summary.json');
+      if (!resp.ok) {
+        resp = await fetch('data.json');
+        if (!resp.ok) throw new Error('데이터를 불러올 수 없습니다.');
+      }
       DATA = await resp.json();
     } catch (err) {
       console.error(err);
@@ -1147,7 +1085,7 @@
         <div style="text-align:center;padding:40px">
           <p style="color:#ef4444;font-size:1.1rem;font-weight:600;margin-bottom:8px">⚠️ 데이터 로드 실패</p>
           <p style="color:rgba(255,255,255,.5);font-size:.85rem">${err.message}</p>
-          <p style="color:rgba(255,255,255,.3);font-size:.75rem;margin-top:12px">data.json 파일이 같은 폴더에 있는지 확인해 주세요.</p>
+          <p style="color:rgba(255,255,255,.3);font-size:.75rem;margin-top:12px">summary.json 파일이 같은 폴더에 있는지 확인해 주세요.</p>
         </div>`;
       return;
     }
@@ -1162,18 +1100,16 @@
     try {
       buildStockPills();
       initScaleToggles();
-      buildTableData();
       initTableSort();
       initTableSearch();
 
       // Select 삼성전자 (005930) as default stock
       const defaultTicker = DATA.stocks['005930'] ? '005930' : Object.keys(DATA.stocks)[0];
-      if (defaultTicker) selectStock(defaultTicker);
+      if (defaultTicker) await selectStock(defaultTicker);
 
       // Global charts
       renderHeatmap();
       renderAccuracyTrend();
-      renderTable();
     } catch (renderErr) {
       console.error('Error rendering dashboard components:', renderErr);
     } finally {
