@@ -708,6 +708,7 @@
         formatter: (val, { dataPointIndex }) => `${val > 0 ? '+' : ''}${val}% (${counts[dataPointIndex]}건)`
       },
       xaxis: {
+        categories,
         labels: {
           style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
           formatter: v => (v > 0 ? '+' : '') + v + '%'
@@ -723,27 +724,7 @@
         theme: 'dark',
         y: { formatter: v => (v > 0 ? '+' : '') + v + '%' }
       },
-      categories,
-      xaxis: {
-        categories,
-        labels: { style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' }, formatter: v => (v > 0 ? '+' : '') + v + '%' },
-        axisBorder: { show: false }, axisTicks: { show: false },
-      },
     };
-    // Fix: yaxis categories need to be inside xaxis for horizontal bar
-    opts.xaxis = {
-      labels: { style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' }, formatter: v => (v > 0 ? '+' : '') + v + '%' },
-      axisBorder: { show: false }, axisTicks: { show: false },
-    };
-    opts.yaxis = {
-      categories,
-      labels: { style: { colors: 'rgba(255,255,255,.55)', fontSize: '11px' }, maxWidth: 200 },
-    };
-    opts.xaxis.categories = categories;
-
-    // Actually for horizontal bar: categories go in xaxis
-    delete opts.categories;
-    opts.xaxis.categories = categories;
 
     if (charts.biasRanking) charts.biasRanking.destroy();
     charts.biasRanking = new ApexCharts(document.getElementById('chart-bias-ranking'), opts);
@@ -827,15 +808,39 @@
   }
 
   // ── Chart 4: Accuracy Trend ──
-  function renderAccuracyTrend() {
-    // Collect all reports across all stocks, attach ticker
+  async function renderAccuracyTrend() {
+    // Collect reports from cached stock details (lazy-loaded)
     const allReports = [];
-    for (const [ticker, stock] of Object.entries(DATA.stocks)) {
+    for (const [ticker, stock] of Object.entries(STOCK_CACHE)) {
       (stock.analyst_reports || []).forEach(r => {
         if (r.current_bias_pct != null) {
           allReports.push({ ...r, ticker, date: r.date });
         }
       });
+    }
+
+    // If not enough data from cache, try loading a few major stocks in background
+    if (allReports.length < 50) {
+      const majorTickers = ['005930', '000660', '005380', 'AAPL', 'NVDA', 'MSFT'].filter(t => DATA.stocks[t] && !STOCK_CACHE[t]);
+      await Promise.all(majorTickers.map(async t => {
+        try {
+          const resp = await fetch(`stocks/${t}.json`);
+          if (resp.ok) {
+            STOCK_CACHE[t] = await resp.json();
+            (STOCK_CACHE[t].analyst_reports || []).forEach(r => {
+              if (r.current_bias_pct != null) {
+                allReports.push({ ...r, ticker: t, date: r.date });
+              }
+            });
+          }
+        } catch(e) { /* skip */ }
+      }));
+    }
+
+    if (!allReports.length) {
+      const el = document.getElementById('chart-accuracy');
+      if (el) el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,.3);font-size:.85rem;">종목을 더 선택하면 정확도 트렌드가 표시됩니다.</div>';
+      return;
     }
 
     // Count by firm
@@ -857,7 +862,6 @@
 
     const series = topFirms.map((firm, i) => {
       const sorted = firmReports[firm].sort((a, b) => new Date(a.date) - new Date(b.date));
-      // Rolling average (window = 3)
       const window = 3;
       const data = sorted.map((r, idx) => {
         const start = Math.max(0, idx - window + 1);
@@ -910,31 +914,6 @@
     charts.accuracy.render();
   }
 
-  // ── Reports Table ──
-  let allTableData = [];
-  let filteredData = [];
-
-  function buildTableData() {
-    allTableData = [];
-    for (const [ticker, stock] of Object.entries(DATA.stocks)) {
-      (stock.analyst_reports || []).forEach(r => {
-        allTableData.push({
-          date: r.date,
-          stock: stock.name,
-          ticker: ticker,
-          market: stock.market,
-          firm: r.firm,
-          analyst: r.analyst || '—',
-          target: r.target_price,
-          bias: r.current_bias_pct,
-          grade: r.grade || '',
-          action: r.action || ''
-        });
-      });
-    }
-    filteredData = [...allTableData];
-    applySort();
-  }
 
   function applySort() {
     const { key, dir } = sortState;

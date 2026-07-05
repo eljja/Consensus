@@ -16,3 +16,11 @@ Thumbs.db
 
 # Scratch
 scratch/
+
+# Legacy data bundle (replaced by summary.json + stocks/*.json)
+data.json
+
+# Build-only utility scripts
+create_favicon.py
+convert_favicon.py
+create_split_data.py
