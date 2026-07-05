@@ -276,6 +276,62 @@
     const currentPrice = stock.current_price;
     if (!activeReports.length || !currentPrice) return;
 
+    const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+    const priceHist = stock.price_history || [];
+
+    // Fast lookup for daily price history
+    const priceMap = {};
+    priceHist.forEach(p => { priceMap[p.date] = p.close; });
+    const sortedDates = Object.keys(priceMap).sort();
+
+    const getPriceOnDate = (dtStr) => {
+      if (priceMap[dtStr]) return priceMap[dtStr];
+      let low = 0, high = sortedDates.length - 1, best = null;
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        if (sortedDates[mid] <= dtStr) {
+          best = priceMap[sortedDates[mid]];
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return best;
+    };
+
+    // Calculate stock-specific 1-year realized bias for each firm on THIS stock
+    const maxHistDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : '';
+    const firmBiasListMap = {};
+
+    allReports.forEach(r => {
+      if (!r.date || !r.firm) return;
+      const dt = new Date(r.date);
+      if (isNaN(dt.getTime())) return;
+
+      const dt1y = new Date(dt);
+      dt1y.setFullYear(dt1y.getFullYear() + 1);
+      const dt1yStr = dt1y.toISOString().split('T')[0];
+
+      if (dt1yStr <= maxHistDate) {
+        const p1y = getPriceOnDate(dt1yStr);
+        if (p1y && p1y > 0) {
+          const bias1y = ((r.target_price - p1y) / p1y) * 100;
+          // Filter out stock split / data anomaly outliers
+          if (bias1y >= -70 && bias1y <= 200) {
+            if (!firmBiasListMap[r.firm]) firmBiasListMap[r.firm] = [];
+            firmBiasListMap[r.firm].push(bias1y);
+          }
+        }
+      }
+    });
+
+    const firmAvgBiasMap = {};
+    for (const [firm, list] of Object.entries(firmBiasListMap)) {
+      const avg = list.reduce((a, b) => a + b, 0) / list.length;
+      // Clamp strictly between -30% and +50% to prevent wild distortions
+      firmAvgBiasMap[firm] = Math.max(-30, Math.min(50, avg));
+    }
+
     // Helper math function for statistics
     const calcStats = (vals) => {
       const sorted = [...vals].sort((a, b) => a - b);
@@ -291,28 +347,9 @@
     const rawVals = activeReports.map(r => r.target_price);
     const rawStats = calcStats(rawVals);
 
-    // 2. Firm-specific historical bias lookup (computed across full 10-year history for each firm)
-    const firmBiasMap = {};
-    activeReports.forEach(r => {
-      if (firmBiasMap[r.firm] === undefined) {
-        const firmStat = DATA.firm_stats ? DATA.firm_stats[r.firm] : null;
-        let bias = 0;
-        if (firmStat && firmStat.avg_realized_bias_pct != null) {
-          bias = firmStat.avg_realized_bias_pct;
-        } else if (firmStat && firmStat.avg_current_bias_pct != null) {
-          bias = firmStat.avg_current_bias_pct;
-        } else if (r.realized_bias_pct != null) {
-          bias = r.realized_bias_pct;
-        } else if (r.current_bias_pct != null) {
-          bias = r.current_bias_pct;
-        }
-        firmBiasMap[r.firm] = bias;
-      }
-    });
-
-    // 3. Compute firm-bias adjusted target for each active report
+    // 2. Compute firm-bias adjusted target for each active report
     const adjVals = activeReports.map(r => {
-      const b = firmBiasMap[r.firm] || 0;
+      const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0; // default +15% optimism if no 1y history
       return r.target_price / (1 + (b / 100));
     });
     const adjStats = calcStats(adjVals);
@@ -347,7 +384,7 @@
 
     const noteEl = document.getElementById('realistic-footer-note');
     if (noteEl) {
-      noteEl.textContent = `* 최근 3개월 이내 ${activeReports.length}개 증권사별 최신 리포트 1건만을 추출한 뒤, 각 증권사의 역대 편향 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.`;
+      noteEl.textContent = `* 최근 3개월 이내 ${activeReports.length}개 증권사별 최신 리포트 1건을 추출한 뒤, 해당 종목에 대한 각 증권사의 역대 1년 실현 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.`;
     }
   }
 
