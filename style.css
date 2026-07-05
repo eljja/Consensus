@@ -112,15 +112,21 @@ body{
 }
 .pill-group{display:flex;flex-wrap:wrap;gap:6px}
 .stock-pill{
-  padding:7px 16px;border-radius:99px;border:1px solid var(--glass-border);
-  background:var(--glass-bg);color:var(--text-secondary);font-size:.8rem;font-weight:500;
-  cursor:pointer;transition:var(--transition);white-space:nowrap;
+  padding:6px 14px;border-radius:99px;border:1px solid var(--glass-border);
+  background:var(--glass-bg);color:var(--text-secondary);font-size:.8rem;font-weight:600;
+  cursor:pointer;transition:all 0.25s ease;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:6px;
   backdrop-filter:blur(12px);
 }
-.stock-pill:hover{background:var(--glass-bg-hover);color:var(--text-primary);border-color:rgba(255,255,255,.15);transform:translateY(-1px)}
+.stock-pill:hover{
+  filter:brightness(1.25);
+  transform:translateY(-1px);
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
 .stock-pill.active{
-  background:var(--primary-soft);border-color:var(--primary);color:#fff;
-  box-shadow:0 0 20px rgba(99,102,241,.2);
+  border-width:2px !important;
+  box-shadow:0 0 16px rgba(255,255,255,.35), 0 0 6px currentColor;
+  filter:brightness(1.35);
 }
 
 /* ===== SUMMARY CARDS ===== */

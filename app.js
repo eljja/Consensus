@@ -117,6 +117,117 @@
     'DIS',   // Walt Disney
   ];
 
+  // Compute stock realistic median target upside % for stock selector pill color coding
+  function calculateStockRealisticMedian(stock) {
+    if (!stock || !stock.current_price) return 0;
+    const currentPrice = stock.current_price;
+    const activeReports = getActiveRecentReports(stock);
+    if (!activeReports.length) return 0;
+
+    const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+    const priceHist = stock.price_history || [];
+    const priceMap = {};
+    priceHist.forEach(p => { priceMap[p.date] = p.close; });
+    const sortedDates = Object.keys(priceMap).sort();
+
+    const getPriceOnDate = (dtStr) => {
+      if (priceMap[dtStr]) return priceMap[dtStr];
+      let low = 0, high = sortedDates.length - 1, best = null;
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        if (sortedDates[mid] <= dtStr) {
+          best = priceMap[sortedDates[mid]];
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return best;
+    };
+
+    const maxHistDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : '';
+    const firmBiasListMap = {};
+
+    allReports.forEach(r => {
+      if (!r.date || !r.firm) return;
+      const dt = new Date(r.date);
+      if (isNaN(dt.getTime())) return;
+
+      const dt1y = new Date(dt);
+      dt1y.setFullYear(dt1y.getFullYear() + 1);
+      const dt1yStr = dt1y.toISOString().split('T')[0];
+
+      if (dt1yStr <= maxHistDate) {
+        const p1y = getPriceOnDate(dt1yStr);
+        if (p1y && p1y > 0) {
+          const bias1y = ((r.target_price - p1y) / p1y) * 100;
+          if (bias1y >= -70 && bias1y <= 200) {
+            if (!firmBiasListMap[r.firm]) firmBiasListMap[r.firm] = [];
+            firmBiasListMap[r.firm].push(bias1y);
+          }
+        }
+      }
+    });
+
+    const firmAvgBiasMap = {};
+    for (const [firm, list] of Object.entries(firmBiasListMap)) {
+      const avg = list.reduce((a, b) => a + b, 0) / list.length;
+      firmAvgBiasMap[firm] = Math.max(-30, Math.min(50, avg));
+    }
+
+    const adjVals = activeReports.map(r => {
+      const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0;
+      return r.target_price / (1 + (b / 100));
+    }).sort((a, b) => a - b);
+
+    if (!adjVals.length) return 0;
+    const mid = Math.floor(adjVals.length / 2);
+    const median = adjVals.length % 2 !== 0 ? adjVals[mid] : (adjVals[mid - 1] + adjVals[mid]) / 2;
+
+    return ((median - currentPrice) / currentPrice) * 100;
+  }
+
+  function getPillColorStyle(upsidePct) {
+    if (Math.abs(upsidePct) < 0.5) {
+      return {
+        bg: 'rgba(255, 255, 255, 0.06)',
+        border: 'rgba(255, 255, 255, 0.15)',
+        text: 'rgba(255, 255, 255, 0.8)',
+        badgeBg: 'rgba(255, 255, 255, 0.1)',
+        badgeText: '#cbd5e1',
+        badge: '0.0%'
+      };
+    }
+
+    if (upsidePct > 0) {
+      // Red tint for stock expected to go UP (상승 예상: 빨간색, 강도에 비례)
+      const intensity = Math.min(upsidePct / 40.0, 1.0);
+      const alphaBg = 0.12 + intensity * 0.28; // 0.12 ~ 0.40
+      const alphaBorder = 0.25 + intensity * 0.45; // 0.25 ~ 0.70
+      return {
+        bg: `rgba(239, 68, 68, ${alphaBg.toFixed(2)})`,
+        border: `rgba(239, 68, 68, ${alphaBorder.toFixed(2)})`,
+        text: '#fca5a5',
+        badgeBg: `rgba(239, 68, 68, ${(alphaBg + 0.15).toFixed(2)})`,
+        badgeText: '#fecaca',
+        badge: `+${upsidePct.toFixed(1)}%`
+      };
+    } else {
+      // Blue tint for stock expected to go DOWN (하락 예상: 파란색, 강도에 비례)
+      const intensity = Math.min(Math.abs(upsidePct) / 25.0, 1.0);
+      const alphaBg = 0.12 + intensity * 0.28; // 0.12 ~ 0.40
+      const alphaBorder = 0.25 + intensity * 0.45; // 0.25 ~ 0.70
+      return {
+        bg: `rgba(59, 130, 246, ${alphaBg.toFixed(2)})`,
+        border: `rgba(59, 130, 246, ${alphaBorder.toFixed(2)})`,
+        text: '#93c5fd',
+        badgeBg: `rgba(59, 130, 246, ${(alphaBg + 0.15).toFixed(2)})`,
+        badgeText: '#bfdbfe',
+        badge: `${upsidePct.toFixed(1)}%`
+      };
+    }
+  }
+
   // ── Build Stock Pills ──
   function buildStockPills() {
     const usContainer = document.getElementById('pills-us');
@@ -152,7 +263,16 @@
       pill.className = 'stock-pill';
       pill.dataset.ticker = info.ticker;
       pill.dataset.search = `${info.name.toLowerCase()} ${info.ticker.toLowerCase()}`;
-      pill.textContent = `${info.name} (${info.ticker})`;
+
+      const upsidePct = calculateStockRealisticMedian(info);
+      const style = getPillColorStyle(upsidePct);
+
+      pill.style.backgroundColor = style.bg;
+      pill.style.borderColor = style.border;
+      pill.style.color = style.text;
+
+      pill.innerHTML = `<span>${info.name} (${info.ticker})</span> <span style="font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:99px;background:${style.badgeBg};color:${style.badgeText};">${style.badge}</span>`;
+
       pill.addEventListener('click', () => selectStock(info.ticker));
       container.appendChild(pill);
     };
