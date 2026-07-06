@@ -1,5 +1,5 @@
 /* ================================================================
-   주식 컨센서스 예측 분석 대시보드 — app.js
+   주식 컨센서스 예측 분석 대시보드 — app.js (i18n & Currency Conversion)
    ================================================================ */
 
 (() => {
@@ -14,6 +14,192 @@
   let currentPage = 1;
   const PAGE_SIZE = 15;
 
+  // ── Exchange Rate (USD / KRW) ──
+  const USD_KRW_RATE = 1380;
+
+  // ── Language & Currency State ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const isEnPage = window.location.pathname.endsWith('index_en.html') || document.documentElement.lang === 'en';
+  let currentLang = urlParams.get('lang') || (isEnPage ? 'en' : (localStorage.getItem('consensus_lang') || 'ko'));
+  let currentCurrency = urlParams.get('curr') || (currentLang === 'en' ? 'USD' : (localStorage.getItem('consensus_curr') || 'AUTO'));
+
+  // ── English Mappings for KR Stocks & Firms ──
+  const KR_STOCK_EN_NAMES = {
+    '005930': 'Samsung Electronics',
+    '000660': 'SK Hynix',
+    '373220': 'LG Energy Solution',
+    '207940': 'Samsung Biologics',
+    '005380': 'Hyundai Motor',
+    '068270': 'Celltrion',
+    '005490': 'POSCO Holdings',
+    '035420': 'NAVER',
+    '000270': 'Kia',
+    '035720': 'Kakao',
+    '105560': 'KB Financial Group',
+    '055550': 'Shinhan Financial Group',
+    '000810': 'Samsung Fire & Marine',
+    '012330': 'Hyundai Mobis',
+    '051910': 'LG Chem',
+    '006400': 'Samsung SDI',
+    '028260': 'Samsung C&T',
+    '032830': 'Samsung Life Insurance',
+    '015760': 'KEPCO',
+    '034020': 'Doosan Enerbility'
+  };
+
+  const FIRM_EN_NAMES = {
+    '삼성증권': 'Samsung Securities',
+    'NH투자증권': 'NH Investment & Securities',
+    '미래에셋증권': 'Mirae Asset Securities',
+    'KB증권': 'KB Securities',
+    '한국투자증권': 'Korea Investment & Securities',
+    '신한투자증권': 'Shinhan Securities',
+    '메리츠증권': 'Meritz Securities',
+    '키움증권': 'Kiwoom Securities',
+    '하나증권': 'Hana Securities',
+    '유진투자증권': 'Eugene Investment & Securities',
+    '대신증권': 'Daeshin Securities',
+    '한화투자증권': 'Hanwha Investment & Securities',
+    '교보증권': 'Kyobo Securities',
+    '현대차증권': 'Hyundai Motor Securities',
+    'IBK투자증권': 'IBK Securities',
+    '유안타증권': 'Yuanta Securities',
+    'DB금융투자': 'DB Financial Investment',
+    '하이투자증권': 'iM Securities',
+    'iM증권': 'iM Securities',
+    'BNK투자증권': 'BNK Securities',
+    '상상인증권': 'Sangsangin Securities',
+    'DS투자증권': 'DS Investment & Securities',
+    '카카오페이증권': 'Kakao Pay Securities',
+    '토스증권': 'Toss Securities'
+  };
+
+  // ── I18N Dictionary ──
+  const I18N = {
+    ko: {
+      title: '주식 컨센서스 예측 분석 대시보드',
+      date_prefix: '데이터 생성일: ',
+      live: 'LIVE',
+      select_stock_title: '종목 선택 (총 40개 대표 종목)',
+      search_placeholder: '종목 검색 (예: 삼성전자, Apple, NVDA...)',
+      us_label: '🇺🇸 US',
+      kr_label: '🇰🇷 KR',
+      card_price: '현재가',
+      card_target: '평균 목표가',
+      card_bias: '평균 괴리율',
+      card_reports: '리포트 수',
+      vs_current: '현재가 대비 ',
+      reports_sub: '최근 3개월 {count}개 증권사 최신',
+      realistic_title: '🎯 현실적 투자 목표가 분석 (증권사별 편향 보정 모델)',
+      realistic_sub: '증권사별 고유 편향 오차(Bias)를 개별 반영하여 산출한 4대 통계 (최대 / 최소 / 중앙값 / 평균값)',
+      raw_badge: '1. 증권사 단순 제시 목표가',
+      adj_badge: '2. 🎯 현실적 투자 목표가 (증권사별 편향 보정)',
+      stat_max: '최대값 (Max)',
+      stat_min: '최소값 (Min)',
+      stat_med: '중앙값 (Median)',
+      stat_avg: '평균값 (Mean)',
+      adj_stat_max: '현실적 최대값 (Adj. Max)',
+      adj_stat_min: '현실적 최소값 (Adj. Min)',
+      adj_stat_med: '현실적 중앙값 (Adj. Median)',
+      adj_stat_avg: '현실적 평균값 (Adj. Mean) ⭐',
+      footer_note: '* 최근 3개월 이내 {count}개 증권사별 최신 리포트 1건을 추출한 뒤, 해당 종목에 대한 각 증권사의 역대 1년 실현 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.',
+      timeline_title: '주가 + 목표가 타임라인',
+      scale_linear: '📏 선형 (Linear)',
+      scale_log: '📊 로그 축 (Log Scale)',
+      scale_pct: '🎯 괴리율 (%)',
+      ranking_title: '증권사별 Bias 랭킹',
+      ranking_sub: '현재 선택된 종목에 대한 증권사 목표가 괴리율 비교',
+      heatmap_title: '증권사 × 종목 히트맵',
+      accuracy_title: '예측 정확도 트렌드',
+      accuracy_sub: '리포트 수 상위 5개 증권사',
+      accuracy_empty: '종목을 더 선택하면 정확도 트렌드가 표시됩니다.',
+      table_title: '전체 리포트 목록',
+      table_search_placeholder: '검색 (증권사, 종목, 애널리스트...)',
+      th_date: '날짜',
+      th_stock: '종목',
+      th_firm: '증권사',
+      th_analyst: '애널리스트',
+      th_target: '목표가',
+      th_bias: '괴리율(%)',
+      th_category: '카테고리',
+      table_total: '총 {count}건',
+      footer: '© 2026 주식 컨센서스 예측 분석 시스템 | 데이터는 참고용이며 투자 권유가 아닙니다.',
+      cat_overly_optimistic: '과대 긍정적',
+      cat_optimistic: '긍정적',
+      cat_accurate: '적정',
+      cat_conservative: '보수적',
+      chart_price_legend: '주가',
+      chart_price_base: '기준 (현재가)',
+      chart_bias_title: '목표가 괴리율 (%)',
+      chart_price_linear_title: '주가 / 목표가 (선형 축)',
+      chart_price_log_title: '주가 / 목표가 (로그 축)',
+      grade: '등급',
+      bias: '괴리율',
+      target_price: '목표가'
+    },
+    en: {
+      title: 'Stock Consensus & Bias Analytics',
+      date_prefix: 'Data Generated: ',
+      live: 'LIVE',
+      select_stock_title: 'Select Stock (40 Major US/KR Stocks)',
+      search_placeholder: 'Search stock (e.g. Samsung, Apple, NVDA...)',
+      us_label: '🇺🇸 US',
+      kr_label: '🇰🇷 KR',
+      card_price: 'Current Price',
+      card_target: 'Avg Target Price',
+      card_bias: 'Avg Bias %',
+      card_reports: 'Active Reports',
+      vs_current: 'vs Current ',
+      reports_sub: 'latest reports from {count} firms (last 3M)',
+      realistic_title: '🎯 Realistic Investment Targets (Bias Adjusted)',
+      realistic_sub: '4 Core Statistics (Max / Min / Median / Mean) adjusted by individual analyst bias history',
+      raw_badge: '1. Raw Brokerage Target Prices',
+      adj_badge: '2. 🎯 Realistic Targets (Firm-Bias Adjusted)',
+      stat_max: 'Max Target',
+      stat_min: 'Min Target',
+      stat_med: 'Median Target',
+      stat_avg: 'Mean Target',
+      adj_stat_max: 'Adj. Max Target',
+      adj_stat_min: 'Adj. Min Target',
+      adj_stat_med: 'Adj. Median Target',
+      adj_stat_avg: 'Adj. Mean Target ⭐',
+      footer_note: '* Calculated by taking the single latest report per firm (within 90d) across {count} firms and adjusting each target price by historical 1-yr bias: T_adj = T_raw / (1 + B_firm/100).',
+      timeline_title: 'Price & Target Timeline',
+      scale_linear: '📏 Linear Scale',
+      scale_log: '📊 Log Scale',
+      scale_pct: '🎯 Bias (%)',
+      ranking_title: 'Firm Bias Ranking',
+      ranking_sub: 'Average analyst target price bias by firm for selected stock',
+      heatmap_title: 'Firm × Stock Heatmap',
+      accuracy_title: 'Prediction Accuracy Trend',
+      accuracy_sub: 'Top 5 coverage firms rolling bias trend',
+      accuracy_empty: 'Select more stocks to view accuracy trend.',
+      table_title: 'All Research Reports',
+      table_search_placeholder: 'Search (Firm, Stock, Analyst...)',
+      th_date: 'Date',
+      th_stock: 'Stock',
+      th_firm: 'Firm',
+      th_analyst: 'Analyst',
+      th_target: 'Target Price',
+      th_bias: 'Bias (%)',
+      th_category: 'Category',
+      table_total: 'Total {count} reports',
+      footer: '© 2026 Stock Consensus Analytics | For informational purposes only, not investment advice.',
+      cat_overly_optimistic: 'Overly Optimistic',
+      cat_optimistic: 'Optimistic',
+      cat_accurate: 'Accurate',
+      cat_conservative: 'Conservative',
+      chart_price_legend: 'Stock Price',
+      chart_price_base: 'Baseline (Current Price)',
+      chart_bias_title: 'Target Price Bias (%)',
+      chart_price_linear_title: 'Price / Target (Linear)',
+      chart_price_log_title: 'Price / Target (Log Scale)',
+      grade: 'Grade',
+      bias: 'Bias',
+      target_price: 'Target Price'
+    }
+  };
+
   // ── Color palette for firms ──
   const FIRM_COLORS = [
     '#6366f1','#f59e0b','#22c55e','#ef4444','#06b6d4',
@@ -23,10 +209,55 @@
     '#818cf8','#4ade80','#fb923c','#60a5fa','#a3e635',
   ];
 
-  // ── Helpers ──
-  function formatPrice(val, market) {
-    if (val == null) return '—';
-    if (market === 'KR') return val.toLocaleString('ko-KR') + '원';
+  // ── Helper Resolvers ──
+  function getStockName(info) {
+    if (!info) return '';
+    if (currentLang === 'en' && info.market === 'KR' && KR_STOCK_EN_NAMES[info.ticker]) {
+      return KR_STOCK_EN_NAMES[info.ticker];
+    }
+    return info.name;
+  }
+
+  function getFirmName(firm) {
+    if (!firm) return '';
+    if (currentLang === 'en' && FIRM_EN_NAMES[firm]) {
+      return FIRM_EN_NAMES[firm];
+    }
+    return firm;
+  }
+
+  function formatPrice(val, market, forceCurrency) {
+    if (val == null || isNaN(val)) return '—';
+
+    let curr = forceCurrency || currentCurrency;
+    if (curr === 'AUTO') {
+      curr = currentLang === 'en' ? 'USD' : (market === 'KR' ? 'KRW' : 'USD');
+    }
+
+    if (curr === 'USD') {
+      let usdVal = val;
+      if (market === 'KR') {
+        usdVal = val / USD_KRW_RATE;
+      }
+      return '$' + usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    if (curr === 'KRW') {
+      let krwVal = val;
+      if (market === 'US') {
+        krwVal = val * USD_KRW_RATE;
+      }
+      if (currentLang === 'en') {
+        return '₩' + Math.round(krwVal).toLocaleString('en-US');
+      }
+      return Math.round(krwVal).toLocaleString('ko-KR') + '원';
+    }
+
+    // Default Fallback
+    if (market === 'KR') {
+      if (currentLang === 'en') return '₩' + Math.round(val).toLocaleString('en-US');
+      return Math.round(val).toLocaleString('ko-KR') + '원';
+    }
     return '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
@@ -37,11 +268,12 @@
   }
 
   function biasCategory(bias) {
+    const dict = I18N[currentLang];
     if (bias == null) return { label: '—', cls: '' };
-    if (bias > 30) return { label: '과대 긍정적', cls: 'badge-overly-optimistic' };
-    if (bias > 15) return { label: '긍정적', cls: 'badge-optimistic' };
-    if (bias >= -15) return { label: '적정', cls: 'badge-accurate' };
-    return { label: '보수적', cls: 'badge-conservative' };
+    if (bias > 30) return { label: dict.cat_overly_optimistic, cls: 'badge-overly-optimistic' };
+    if (bias > 15) return { label: dict.cat_optimistic, cls: 'badge-optimistic' };
+    if (bias >= -15) return { label: dict.cat_accurate, cls: 'badge-accurate' };
+    return { label: dict.cat_conservative, cls: 'badge-conservative' };
   }
 
   function biasColor(val) {
@@ -52,7 +284,7 @@
     return '#3b82f6';
   }
 
-  function animateValue(el, target, suffix = '', prefix = '', duration = 600) {
+  function animateValue(el, target, market, isRawValue = true, duration = 600) {
     if (!el || target == null || isNaN(target)) return;
     const start = 0;
     const startTime = performance.now();
@@ -60,16 +292,11 @@
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const ease = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(start + (target - start) * ease);
-      el.textContent = prefix + (marketFormat(current, suffix) || current.toLocaleString()) + suffix;
+      const current = start + (target - start) * ease;
+      el.textContent = isRawValue ? formatPrice(current, market) : (current > 0 ? '+' : '') + current.toFixed(1) + '%';
       if (progress < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
-  }
-
-  function marketFormat(num, suffix) {
-    if (suffix === '원') return num.toLocaleString('ko-KR');
-    return null;
   }
 
   // ── Stock Order ──
@@ -83,7 +310,6 @@
     '105560', '055550', '000810', '012330', '051910', '006400', '028260', '032830', '015760', '034020',
   ];
 
-  // Compute stock realistic median target upside % from summary data
   function calculateStockRealisticMedian(stockSummary) {
     if (stockSummary && stockSummary.realistic_median_upside != null) {
       return stockSummary.realistic_median_upside;
@@ -148,15 +374,19 @@
       const pill = document.createElement('button');
       pill.className = 'stock-pill';
       pill.dataset.ticker = info.ticker;
-      pill.dataset.search = `${info.name.toLowerCase()} ${info.ticker.toLowerCase()}`;
+
+      const koName = info.name;
+      const enName = KR_STOCK_EN_NAMES[info.ticker] || info.name;
+      pill.dataset.search = `${koName.toLowerCase()} ${enName.toLowerCase()} ${info.ticker.toLowerCase()}`;
 
       const upsidePct = calculateStockRealisticMedian(info);
       const style = getPillColorStyle(upsidePct);
+      const displayName = getStockName(info);
 
       pill.style.backgroundColor = style.bg;
       pill.style.borderColor = style.border;
       pill.style.color = style.text;
-      pill.innerHTML = `<span>${info.name} (${info.ticker})</span> <span style="font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:99px;background:${style.badgeBg};color:${style.badgeText};">${style.badge}</span>`;
+      pill.innerHTML = `<span>${displayName} (${info.ticker})</span> <span style="font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:99px;background:${style.badgeBg};color:${style.badgeText};">${style.badge}</span>`;
 
       pill.addEventListener('click', () => selectStock(info.ticker));
       container.appendChild(pill);
@@ -205,14 +435,12 @@
     updateDashboard();
   }
 
-  // Helper to extract active recent target reports (ONLY the latest 1 report per firm issued within 90 days max)
   function getActiveRecentReports(stock) {
     const targetStock = stock || STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (!targetStock) return [];
     const allReports = (targetStock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
     if (!allReports.length) return [];
 
-    // Find the latest report date in the dataset for this stock
     let maxTime = 0;
     allReports.forEach(r => {
       const t = new Date(r.date).getTime();
@@ -220,18 +448,15 @@
     });
     if (!maxTime) return [];
 
-    // Cutoff: 90 days (3 months)
     const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
     let cutoff = maxTime - ninetyDaysMs;
     let recent = allReports.filter(r => new Date(r.date).getTime() >= cutoff);
 
-    // Fallback: if fewer than 3 reports in 90 days, expand window to 180 days (6 months)
     if (recent.length < 3) {
       cutoff = maxTime - (180 * 24 * 60 * 60 * 1000);
       recent = allReports.filter(r => new Date(r.date).getTime() >= cutoff);
     }
 
-    // Deduplicate by firm: pick ONLY the single latest report for each firm
     const firmLatestMap = {};
     recent.forEach(r => {
       const rTime = new Date(r.date).getTime();
@@ -250,35 +475,32 @@
     const market = stock.market;
     const activeReports = getActiveRecentReports(stock);
     const currentPrice = stock.current_price;
+    const dict = I18N[currentLang];
 
-    // Average target of active recent reports (most recent 1 per firm within 90d)
     const targets = activeReports.map(r => r.target_price);
     const avgTarget = targets.length ? targets.reduce((a, b) => a + b, 0) / targets.length : null;
 
-    // Average bias of active recent reports
     const biases = activeReports.map(r => r.current_bias_pct).filter(b => b != null);
     const avgBias = biases.length ? biases.reduce((a, b) => a + b, 0) / biases.length : null;
 
     // Price
-    const pricePrefix = market === 'KR' ? '' : '$';
-    const priceSuffix = market === 'KR' ? '원' : '';
-    animateValue(document.getElementById('val-price'), currentPrice, priceSuffix, pricePrefix);
-    document.getElementById('sub-price').textContent = `${stock.name} · ${stock.market}`;
+    animateValue(document.getElementById('val-price'), currentPrice, market, true);
+    document.getElementById('sub-price').textContent = `${getStockName(stock)} · ${stock.market}`;
 
     // Target
     if (avgTarget != null) {
-      animateValue(document.getElementById('val-target'), Math.round(avgTarget), priceSuffix, pricePrefix);
+      animateValue(document.getElementById('val-target'), Math.round(avgTarget), market, true);
     } else {
       document.getElementById('val-target').textContent = '—';
     }
     const diff = avgTarget != null ? avgTarget - currentPrice : null;
     document.getElementById('sub-target').textContent = diff != null
-      ? `현재가 대비 ${diff >= 0 ? '+' : ''}${market === 'KR' ? Math.round(diff).toLocaleString('ko-KR') + '원' : '$' + diff.toFixed(2)}`
+      ? `${dict.vs_current}${diff >= 0 ? '+' : ''}${formatPrice(diff, market)}`
       : '';
 
     // Bias
     if (avgBias != null) {
-      animateValue(document.getElementById('val-bias'), avgBias, '%', avgBias >= 0 ? '+' : '');
+      animateValue(document.getElementById('val-bias'), avgBias, market, false);
       const bc = biasCategory(avgBias);
       document.getElementById('sub-bias').textContent = bc.label;
       document.getElementById('sub-bias').style.color = biasColor(avgBias);
@@ -288,10 +510,11 @@
     }
 
     // Reports
-    animateValue(document.getElementById('val-reports'), activeReports.length);
-    document.getElementById('sub-reports').textContent = `최근 3개월 ${activeReports.length}개 증권사 최신`;
+    const repValEl = document.getElementById('val-reports');
+    if (repValEl) repValEl.textContent = activeReports.length;
+    document.getElementById('sub-reports').textContent = dict.reports_sub.replace('{count}', activeReports.length);
 
-    // 4-Stat Firm-Bias Adjusted Realistic Target Statistics
+    // Realistic Target Stats
     updateRealisticTargetStats(stock);
   }
 
@@ -301,12 +524,12 @@
     const market = stock.market;
     const activeReports = getActiveRecentReports(stock);
     const currentPrice = stock.current_price;
+    const dict = I18N[currentLang];
     if (!activeReports.length || !currentPrice) return;
 
     const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
     const priceHist = stock.price_history || [];
 
-    // Fast lookup for daily price history
     const priceMap = {};
     priceHist.forEach(p => { priceMap[p.date] = p.close; });
     const sortedDates = Object.keys(priceMap).sort();
@@ -326,7 +549,6 @@
       return best;
     };
 
-    // Calculate stock-specific 1-year realized bias for each firm on THIS stock
     const maxHistDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : '';
     const firmBiasListMap = {};
 
@@ -343,7 +565,6 @@
         const p1y = getPriceOnDate(dt1yStr);
         if (p1y && p1y > 0) {
           const bias1y = ((r.target_price - p1y) / p1y) * 100;
-          // Filter out stock split / data anomaly outliers
           if (bias1y >= -70 && bias1y <= 200) {
             if (!firmBiasListMap[r.firm]) firmBiasListMap[r.firm] = [];
             firmBiasListMap[r.firm].push(bias1y);
@@ -355,11 +576,9 @@
     const firmAvgBiasMap = {};
     for (const [firm, list] of Object.entries(firmBiasListMap)) {
       const avg = list.reduce((a, b) => a + b, 0) / list.length;
-      // Clamp strictly between -30% and +50% to prevent wild distortions
       firmAvgBiasMap[firm] = Math.max(-30, Math.min(50, avg));
     }
 
-    // Helper math function for statistics
     const calcStats = (vals) => {
       const sorted = [...vals].sort((a, b) => a - b);
       const min = sorted[0];
@@ -370,40 +589,32 @@
       return { min, max, median, mean };
     };
 
-    // 1. Raw Active Targets statistics (most recent per firm within 90 days)
     const rawVals = activeReports.map(r => r.target_price);
     const rawStats = calcStats(rawVals);
 
-    // 2. Compute firm-bias adjusted target for each active report
     const adjVals = activeReports.map(r => {
-      const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0; // default +15% optimism if no 1y history
+      const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0;
       return r.target_price / (1 + (b / 100));
     });
     const adjStats = calcStats(adjVals);
-
-    // DOM helper formatters
-    const priceSuffix = market === 'KR' ? '원' : '';
-    const pricePrefix = market === 'KR' ? '' : '$';
 
     const renderStatBox = (valId, subId, val) => {
       const valEl = document.getElementById(valId);
       const subEl = document.getElementById(subId);
       if (!valEl || !subEl) return;
 
-      animateValue(valEl, Math.round(val), priceSuffix, pricePrefix);
+      animateValue(valEl, Math.round(val), market, true);
       const upside = ((val - currentPrice) / currentPrice) * 100;
       const sign = upside >= 0 ? '+' : '';
-      subEl.textContent = `현재가 대비 ${sign}${upside.toFixed(1)}%`;
+      subEl.textContent = `${dict.vs_current}${sign}${upside.toFixed(1)}%`;
       subEl.style.color = upside >= 0 ? '#4ade80' : '#ef4444';
     };
 
-    // Render Raw Stats
     renderStatBox('raw-stat-max', 'raw-sub-max', rawStats.max);
     renderStatBox('raw-stat-min', 'raw-sub-min', rawStats.min);
     renderStatBox('raw-stat-med', 'raw-sub-med', rawStats.median);
     renderStatBox('raw-stat-avg', 'raw-sub-avg', rawStats.mean);
 
-    // Render Adjusted Stats
     renderStatBox('adj-stat-max', 'adj-sub-max', adjStats.max);
     renderStatBox('adj-stat-min', 'adj-sub-min', adjStats.min);
     renderStatBox('adj-stat-med', 'adj-sub-med', adjStats.median);
@@ -411,7 +622,7 @@
 
     const noteEl = document.getElementById('realistic-footer-note');
     if (noteEl) {
-      noteEl.textContent = `* 최근 3개월 이내 ${activeReports.length}개 증권사별 최신 리포트 1건을 추출한 뒤, 해당 종목에 대한 각 증권사의 역대 1년 실현 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.`;
+      noteEl.textContent = dict.footer_note.replace('{count}', activeReports.length);
     }
   }
 
@@ -441,7 +652,7 @@
     const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (!stock) return;
 
-    const isKR = stock.market === 'KR';
+    const dict = I18N[currentLang];
     const isPct = currentScaleMode === 'pct';
     const isLog = currentScaleMode === 'log';
 
@@ -452,7 +663,6 @@
     let colorIdx = 0;
 
     if (isPct) {
-      // Percentage Bias % mode over time
       const priceData = (stock.price_history || []).map(p => ({
         x: new Date(p.date).getTime(), y: 0
       }));
@@ -460,11 +670,12 @@
       const firmMap = {};
       (stock.analyst_reports || []).forEach(r => {
         if (r.current_bias_pct == null) return;
-        if (!firmMap[r.firm]) firmMap[r.firm] = [];
-        firmMap[r.firm].push({
+        const displayName = getFirmName(r.firm);
+        if (!firmMap[displayName]) firmMap[displayName] = [];
+        firmMap[displayName].push({
           x: new Date(r.date).getTime(),
           y: r.current_bias_pct,
-          firm: r.firm,
+          firm: displayName,
           analyst: r.analyst,
           target_price: r.target_price,
           bias: r.current_bias_pct,
@@ -478,7 +689,7 @@
         colorIdx++;
       }
 
-      const priceSeries = { name: '기준 (현재가)', type: 'line', data: priceData };
+      const priceSeries = { name: dict.chart_price_base, type: 'line', data: priceData };
       series = [...scatterSeries, priceSeries];
 
       yaxisOpts = {
@@ -486,22 +697,22 @@
           style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
           formatter: v => v != null ? (v > 0 ? '+' : '') + v.toFixed(0) + '%' : ''
         },
-        title: { text: '목표가 괴리율 (%)', style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' } }
+        title: { text: dict.chart_bias_title, style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' } }
       };
 
     } else {
-      // Linear or Log scale price mode
       const priceData = (stock.price_history || []).map(p => ({
         x: new Date(p.date).getTime(), y: p.close
       }));
 
       const firmMap = {};
       (stock.analyst_reports || []).forEach(r => {
-        if (!firmMap[r.firm]) firmMap[r.firm] = [];
-        firmMap[r.firm].push({
+        const displayName = getFirmName(r.firm);
+        if (!firmMap[displayName]) firmMap[displayName] = [];
+        firmMap[displayName].push({
           x: new Date(r.date).getTime(),
           y: r.target_price,
-          firm: r.firm,
+          firm: displayName,
           analyst: r.analyst,
           target_price: r.target_price,
           bias: r.current_bias_pct,
@@ -515,7 +726,7 @@
         colorIdx++;
       }
 
-      const priceSeries = { name: '주가', type: 'line', data: priceData };
+      const priceSeries = { name: dict.chart_price_legend, type: 'line', data: priceData };
       series = [...scatterSeries, priceSeries];
 
       if (isLog) {
@@ -536,11 +747,11 @@
             style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
             formatter: v => {
               if (v == null || isNaN(v) || v <= 0) return '';
-              return isKR ? (v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : Math.round(v).toLocaleString()) : '$' + Math.round(v);
+              return formatPrice(v, stock.market);
             }
           },
           title: {
-            text: '주가 / 목표가 (로그 축)',
+            text: dict.chart_price_log_title,
             style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
           }
         };
@@ -550,11 +761,11 @@
             style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
             formatter: v => {
               if (v == null || isNaN(v)) return '';
-              return isKR ? (v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : v.toLocaleString()) : '$' + v.toFixed(0);
+              return formatPrice(v, stock.market);
             }
           },
           title: {
-            text: '주가 / 목표가 (선형 축)',
+            text: dict.chart_price_linear_title,
             style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
           }
         };
@@ -562,10 +773,9 @@
     }
 
     const firmCount = scatterSeries.length;
-    // Price line series is placed LAST so SVG draws it ON TOP of all scatter dots!
     const chartColors = [...scatterColors, '#6366f1'];
     const strokeWidths = [...Array(firmCount).fill(0), 3.5];
-    const markerSizes = [...Array(firmCount).fill(3.8), 0]; // 3.8 = 60% of original size 6
+    const markerSizes = [...Array(firmCount).fill(3.8), 0];
     const opacities = [...Array(firmCount).fill(0.85), 1];
 
     const opts = {
@@ -580,7 +790,7 @@
       stroke: { width: strokeWidths, curve: 'smooth' },
       markers: {
         size: markerSizes,
-        strokeWidth: 0, // No border stroke around scatter dots!
+        strokeWidth: 0,
         hover: { sizeOffset: 2 }
       },
       fill: {
@@ -607,19 +817,20 @@
           const isLineSeries = seriesIndex === series.length - 1;
           const point = w.config.series[seriesIndex].data[dataPointIndex];
           if (!point) return '';
+          const dateStr = new Date(point.x).toLocaleDateString(currentLang === 'en' ? 'en-US' : 'ko-KR');
           if (isLineSeries) {
             return `<div style="padding:10px 14px;font-size:12px;">
-              <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${new Date(point.x).toLocaleDateString('ko-KR')}</div>
-              <div style="font-weight:700;">${isPct ? '현재가 기준 (0%)' : '주가: ' + formatPrice(point.y, stock.market)}</div>
+              <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${dateStr}</div>
+              <div style="font-weight:700;">${isPct ? dict.chart_price_base : dict.chart_price_legend + ': ' + formatPrice(point.y, stock.market)}</div>
             </div>`;
           }
           return `<div style="padding:10px 14px;font-size:12px;max-width:240px;">
-            <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${new Date(point.x).toLocaleDateString('ko-KR')}</div>
+            <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${dateStr}</div>
             <div style="font-weight:700;margin-bottom:2px;">${point.firm}</div>
             ${point.analyst ? `<div style="color:rgba(255,255,255,.5);">${point.analyst}</div>` : ''}
-            <div style="margin-top:6px;">목표가: <strong>${formatPrice(point.target_price || point.y, stock.market)}</strong></div>
-            ${point.grade ? `<div>등급: ${point.grade}</div>` : ''}
-            ${point.bias != null ? `<div>괴리율: <span style="color:${biasColor(point.bias)}">${formatPercent(point.bias)}</span></div>` : ''}
+            <div style="margin-top:6px;">${dict.target_price}: <strong>${formatPrice(point.target_price || point.y, stock.market)}</strong></div>
+            ${point.grade ? `<div>${dict.grade}: ${point.grade}</div>` : ''}
+            ${point.bias != null ? `<div>${dict.bias}: <span style="color:${biasColor(point.bias)}">${formatPercent(point.bias)}</span></div>` : ''}
           </div>`;
         }
       },
@@ -630,7 +841,7 @@
     charts.timeline.render();
   }
 
-  // ── Reports Table ──
+  // ── Reports Table Data ──
   let allTableData = [];
   let filteredData = [];
 
@@ -641,10 +852,11 @@
       stock.analyst_reports.forEach(r => {
         allTableData.push({
           date: r.date,
-          stock: stock.name,
+          stock: getStockName(stock),
           ticker: selectedTicker,
           market: stock.market,
-          firm: r.firm,
+          firm: getFirmName(r.firm),
+          raw_firm: r.firm,
           analyst: r.analyst || '—',
           target: r.target_price,
           bias: r.current_bias_pct,
@@ -666,8 +878,9 @@
     const firmBias = {};
     (stock.analyst_reports || []).forEach(r => {
       if (r.current_bias_pct == null) return;
-      if (!firmBias[r.firm]) firmBias[r.firm] = [];
-      firmBias[r.firm].push(r.current_bias_pct);
+      const name = getFirmName(r.firm);
+      if (!firmBias[name]) firmBias[name] = [];
+      firmBias[name].push(r.current_bias_pct);
     });
 
     const entries = Object.entries(firmBias).map(([firm, vals]) => ({
@@ -687,7 +900,7 @@
     });
 
     const opts = {
-      series: [{ name: '평균 괴리율', data: values }],
+      series: [{ name: I18N[currentLang].card_bias, data: values }],
       chart: {
         type: 'bar', height: Math.max(300, entries.length * 36), background: 'transparent',
         fontFamily: 'Inter, sans-serif',
@@ -705,7 +918,7 @@
       dataLabels: {
         enabled: true, textAnchor: 'start', offsetX: 8,
         style: { colors: ['#fff'], fontSize: '11px', fontWeight: 600 },
-        formatter: (val, { dataPointIndex }) => `${val > 0 ? '+' : ''}${val}% (${counts[dataPointIndex]}건)`
+        formatter: (val, { dataPointIndex }) => `${val > 0 ? '+' : ''}${val}% (${counts[dataPointIndex]})`
       },
       xaxis: {
         categories,
@@ -737,26 +950,24 @@
     if (!firmStats) return;
 
     const allStocks = Object.keys(DATA.stocks);
-    const stockLabels = allStocks.map(t => DATA.stocks[t].name);
-
-    // Get firms sorted by total_reports desc
     const firms = Object.entries(firmStats)
       .sort((a, b) => b[1].total_reports - a[1].total_reports)
-      .slice(0, 20); // Limit for readability
+      .slice(0, 20);
 
     const series = firms.map(([firm, stats]) => {
-      const data = allStocks.map((ticker, i) => {
+      const data = allStocks.map((ticker) => {
         const byStock = stats.by_stock || {};
         const entry = byStock[ticker];
         const hasBias = entry && entry.avg_bias != null;
         return {
-          x: DATA.stocks[ticker].name,
+          x: getStockName(DATA.stocks[ticker]),
           y: hasBias ? parseFloat(entry.avg_bias.toFixed(1)) : null
         };
       });
-      return { name: firm, data };
+      return { name: getFirmName(firm), data };
     });
 
+    const dict = I18N[currentLang];
     const opts = {
       series,
       chart: {
@@ -771,10 +982,10 @@
           radius: 4,
           colorScale: {
             ranges: [
-              { from: -100, to: -15.01, color: '#3b82f6', name: '보수적' },
-              { from: -15, to: 15, color: '#374151', name: '적정' },
-              { from: 15.01, to: 30, color: '#f97316', name: '긍정적' },
-              { from: 30.01, to: 200, color: '#ef4444', name: '과대 긍정적' },
+              { from: -100, to: -15.01, color: '#3b82f6', name: dict.cat_conservative },
+              { from: -15, to: 15, color: '#374151', name: dict.cat_accurate },
+              { from: 15.01, to: 30, color: '#f97316', name: dict.cat_optimistic },
+              { from: 30.01, to: 200, color: '#ef4444', name: dict.cat_overly_optimistic },
             ]
           }
         }
@@ -795,7 +1006,7 @@
       legend: { position: 'top', labels: { colors: 'rgba(255,255,255,.5)' }, fontSize: '11px' },
       tooltip: {
         theme: 'dark',
-        y: { formatter: v => v != null ? (v > 0 ? '+' : '') + v + '%' : '데이터 없음' }
+        y: { formatter: v => v != null ? (v > 0 ? '+' : '') + v + '%' : '—' }
       },
       states: {
         hover: { filter: { type: 'lighten', value: 0.15 } }
@@ -809,7 +1020,6 @@
 
   // ── Chart 4: Accuracy Trend ──
   async function renderAccuracyTrend() {
-    // Collect reports from cached stock details (lazy-loaded)
     const allReports = [];
     for (const [ticker, stock] of Object.entries(STOCK_CACHE)) {
       (stock.analyst_reports || []).forEach(r => {
@@ -819,7 +1029,6 @@
       });
     }
 
-    // If not enough data from cache, try loading a few major stocks in background
     if (allReports.length < 50) {
       const majorTickers = ['005930', '000660', '005380', 'AAPL', 'NVDA', 'MSFT'].filter(t => DATA.stocks[t] && !STOCK_CACHE[t]);
       await Promise.all(majorTickers.map(async t => {
@@ -839,11 +1048,10 @@
 
     if (!allReports.length) {
       const el = document.getElementById('chart-accuracy');
-      if (el) el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,.3);font-size:.85rem;">종목을 더 선택하면 정확도 트렌드가 표시됩니다.</div>';
+      if (el) el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,.3);font-size:.85rem;">${I18N[currentLang].accuracy_empty}</div>`;
       return;
     }
 
-    // Count by firm
     const firmCounts = {};
     allReports.forEach(r => { firmCounts[r.firm] = (firmCounts[r.firm] || 0) + 1; });
     const topFirms = Object.entries(firmCounts)
@@ -851,7 +1059,6 @@
       .slice(0, 5)
       .map(e => e[0]);
 
-    // Group reports by firm and sort by date
     const firmReports = {};
     topFirms.forEach(f => { firmReports[f] = []; });
     allReports.forEach(r => {
@@ -860,7 +1067,7 @@
       }
     });
 
-    const series = topFirms.map((firm, i) => {
+    const series = topFirms.map((firm) => {
       const sorted = firmReports[firm].sort((a, b) => new Date(a.date) - new Date(b.date));
       const window = 3;
       const data = sorted.map((r, idx) => {
@@ -869,7 +1076,7 @@
         const avg = slice.reduce((s, x) => s + Math.abs(x.current_bias_pct), 0) / slice.length;
         return { x: new Date(r.date).getTime(), y: parseFloat(avg.toFixed(1)) };
       });
-      return { name: firm, data };
+      return { name: getFirmName(firm), data };
     });
 
     const opts = {
@@ -889,7 +1096,7 @@
         axisBorder: { show: false }, axisTicks: { show: false },
       },
       yaxis: {
-        title: { text: '|괴리율| 이동평균 (%)', style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' } },
+        title: { text: '|Bias| Rolling Avg (%)', style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' } },
         labels: {
           style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
           formatter: v => v.toFixed(0) + '%'
@@ -913,7 +1120,6 @@
     charts.accuracy = new ApexCharts(document.getElementById('chart-accuracy'), opts);
     charts.accuracy.render();
   }
-
 
   function applySort() {
     const { key, dir } = sortState;
@@ -954,7 +1160,8 @@
       </tr>`;
     }).join('');
 
-    document.getElementById('table-count').textContent = `총 ${filteredData.length.toLocaleString()}건`;
+    const dict = I18N[currentLang];
+    document.getElementById('table-count').textContent = dict.table_total.replace('{count}', filteredData.length.toLocaleString());
     renderPagination(totalPages);
   }
 
@@ -989,7 +1196,6 @@
     });
   }
 
-  // Table sort headers
   function initTableSort() {
     document.querySelectorAll('.report-table th.sortable').forEach(th => {
       th.addEventListener('click', () => {
@@ -1000,7 +1206,6 @@
           sortState.key = key;
           sortState.dir = 'desc';
         }
-        // Update header styles
         document.querySelectorAll('.report-table th.sortable').forEach(h => {
           h.classList.remove('active-sort');
           h.querySelector('.sort-icon').textContent = '⇅';
@@ -1015,7 +1220,6 @@
     });
   }
 
-  // Table search
   function initTableSearch() {
     const input = document.getElementById('table-search');
     let debounce;
@@ -1027,11 +1231,12 @@
           filteredData = [...allTableData];
         } else {
           filteredData = allTableData.filter(r =>
-            r.firm.toLowerCase().includes(q) ||
-            r.stock.toLowerCase().includes(q) ||
-            r.ticker.toLowerCase().includes(q) ||
-            r.analyst.toLowerCase().includes(q) ||
-            r.date.includes(q)
+            (r.firm || '').toLowerCase().includes(q) ||
+            (r.raw_firm || '').toLowerCase().includes(q) ||
+            (r.stock || '').toLowerCase().includes(q) ||
+            (r.ticker || '').toLowerCase().includes(q) ||
+            (r.analyst || '').toLowerCase().includes(q) ||
+            (r.date || '').includes(q)
           );
         }
         applySort();
@@ -1039,6 +1244,77 @@
         renderTable();
       }, 200);
     });
+  }
+
+  // ── Language & Currency Controls Handler ──
+  function applyLanguageDOM() {
+    const dict = I18N[currentLang];
+    document.documentElement.lang = currentLang;
+
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.dataset.i18n;
+      if (dict[key]) el.textContent = dict[key];
+    });
+
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+      const key = el.dataset.i18nPh;
+      if (dict[key]) el.placeholder = dict[key];
+    });
+
+    document.querySelectorAll('#lang-switcher .ctrl-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === currentLang);
+    });
+
+    document.querySelectorAll('#curr-switcher .ctrl-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.curr === currentCurrency);
+    });
+  }
+
+  function initControls() {
+    const langGroup = document.getElementById('lang-switcher');
+    if (langGroup && !langGroup.dataset.bound) {
+      langGroup.dataset.bound = 'true';
+      langGroup.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-lang]');
+        if (!btn) return;
+        const targetLang = btn.dataset.lang;
+        if (targetLang === currentLang) return;
+
+        currentLang = targetLang;
+        localStorage.setItem('consensus_lang', currentLang);
+
+        // If on index.html and switched to en, or vice versa, offer direct page navigation or in-place update
+        if (currentLang === 'en' && !window.location.pathname.endsWith('index_en.html')) {
+          window.location.href = 'index_en.html';
+          return;
+        } else if (currentLang === 'ko' && window.location.pathname.endsWith('index_en.html')) {
+          window.location.href = 'index.html';
+          return;
+        }
+
+        applyLanguageDOM();
+        buildStockPills();
+        updateDashboard();
+        renderHeatmap();
+        renderAccuracyTrend();
+      });
+    }
+
+    const currGroup = document.getElementById('curr-switcher');
+    if (currGroup && !currGroup.dataset.bound) {
+      currGroup.dataset.bound = 'true';
+      currGroup.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-curr]');
+        if (!btn) return;
+        const targetCurr = btn.dataset.curr;
+        if (targetCurr === currentCurrency) return;
+
+        currentCurrency = targetCurr;
+        localStorage.setItem('consensus_curr', currentCurrency);
+        applyLanguageDOM();
+        updateDashboard();
+      });
+    }
   }
 
   // ── Master Update ──
@@ -1055,44 +1331,44 @@
       let resp = await fetch('summary.json');
       if (!resp.ok) {
         resp = await fetch('data.json');
-        if (!resp.ok) throw new Error('데이터를 불러올 수 없습니다.');
+        if (!resp.ok) throw new Error('Cannot load data file.');
       }
       DATA = await resp.json();
     } catch (err) {
       console.error(err);
       document.getElementById('loading-overlay').innerHTML = `
         <div style="text-align:center;padding:40px">
-          <p style="color:#ef4444;font-size:1.1rem;font-weight:600;margin-bottom:8px">⚠️ 데이터 로드 실패</p>
+          <p style="color:#ef4444;font-size:1.1rem;font-weight:600;margin-bottom:8px">⚠️ Data Load Error</p>
           <p style="color:rgba(255,255,255,.5);font-size:.85rem">${err.message}</p>
-          <p style="color:rgba(255,255,255,.3);font-size:.75rem;margin-top:12px">summary.json 파일이 같은 폴더에 있는지 확인해 주세요.</p>
         </div>`;
       return;
     }
 
-    // Set generation time
     if (DATA.generated_at) {
       const d = new Date(DATA.generated_at);
-      document.getElementById('generated-at').textContent =
-        `데이터 생성일: ${d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+      const dict = I18N[currentLang];
+      const formattedDate = currentLang === 'en'
+        ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+      document.getElementById('generated-at').textContent = `${dict.date_prefix}${formattedDate}`;
     }
 
     try {
+      applyLanguageDOM();
+      initControls();
       buildStockPills();
       initScaleToggles();
       initTableSort();
       initTableSearch();
 
-      // Select 삼성전자 (005930) as default stock
       const defaultTicker = DATA.stocks['005930'] ? '005930' : Object.keys(DATA.stocks)[0];
       if (defaultTicker) await selectStock(defaultTicker);
 
-      // Global charts
       renderHeatmap();
       renderAccuracyTrend();
     } catch (renderErr) {
       console.error('Error rendering dashboard components:', renderErr);
     } finally {
-      // Hide loader guaranteed
       setTimeout(() => {
         const loader = document.getElementById('loading-overlay');
         if (loader) loader.classList.add('hidden');
@@ -1100,7 +1376,6 @@
     }
   }
 
-  // Trigger intersection-based fade-in
   function initFadeIn() {
     const observer = new IntersectionObserver(entries => {
       entries.forEach(e => {

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>주식 컨센서스 예측 분석 대시보드</title>
-  <meta name="description" content="40개 대표 종목(US/KR)의 증권사 목표가 컨센서스, 괴리율 분석, 편향 보정 현실적 투자 목표가를 제공하는 대시보드" />
+  <title>Stock Consensus Prediction & Bias Analytics</title>
+  <meta name="description" content="Stock consensus analyst target price bias analysis and realistic target prices for 40 major US/KR stocks with USD/KRW currency conversion." />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
   <link rel="shortcut icon" href="favicon.ico" />
@@ -27,7 +27,7 @@
     <div class="loader-ring">
       <div></div><div></div><div></div><div></div>
     </div>
-    <p class="loader-text">데이터 로딩 중...</p>
+    <p class="loader-text">Loading Data...</p>
   </div>
 
   <!-- Top bar -->
@@ -40,19 +40,19 @@
           </svg>
         </div>
         <div>
-          <h1 class="brand-title" data-i18n="title">주식 컨센서스 예측 분석 대시보드</h1>
-          <p class="brand-sub" id="generated-at">데이터 생성일: —</p>
+          <h1 class="brand-title" data-i18n="title">Stock Consensus Prediction & Bias Analytics</h1>
+          <p class="brand-sub" id="generated-at">Data Generated: —</p>
         </div>
       </div>
       <div class="top-bar-right">
         <div class="header-controls">
           <div class="control-group" id="lang-switcher">
-            <button class="ctrl-btn active" data-lang="ko">🇰🇷 KO</button>
-            <button class="ctrl-btn" data-lang="en">🇺🇸 EN</button>
+            <button class="ctrl-btn" data-lang="ko">🇰🇷 KO</button>
+            <button class="ctrl-btn active" data-lang="en">🇺🇸 EN</button>
           </div>
           <div class="control-group" id="curr-switcher">
-            <button class="ctrl-btn active" data-curr="AUTO" title="Auto Currency">🔀 Auto</button>
-            <button class="ctrl-btn" data-curr="USD" title="USD ($)">$ USD</button>
+            <button class="ctrl-btn" data-curr="AUTO" title="Auto Currency">🔀 Auto</button>
+            <button class="ctrl-btn active" data-curr="USD" title="USD ($)">$ USD</button>
             <button class="ctrl-btn" data-curr="KRW" title="KRW (₩)">₩ KRW</button>
           </div>
         </div>
@@ -70,10 +70,10 @@
       <div class="section-header">
         <h2 class="section-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span data-i18n="select_stock_title">종목 선택 (총 40개 대표 종목)</span>
+          <span data-i18n="select_stock_title">Select Stock (40 Major US/KR Stocks)</span>
         </h2>
         <div class="table-controls">
-          <input type="text" id="stock-search" class="table-search" placeholder="종목 검색 (예: 삼성전자, Apple, NVDA...)" data-i18n-ph="search_placeholder" />
+          <input type="text" id="stock-search" class="table-search" placeholder="Search stock (e.g. Samsung, Apple, NVDA...)" data-i18n-ph="search_placeholder" />
         </div>
       </div>
       <div class="stock-selector-wrapper">
@@ -95,7 +95,7 @@
           <div class="card-icon icon-price">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
-          <p class="card-label" data-i18n="card_price">현재가</p>
+          <p class="card-label" data-i18n="card_price">Current Price</p>
           <p class="card-value" id="val-price">—</p>
           <p class="card-sub" id="sub-price"></p>
         </div>
@@ -103,7 +103,7 @@
           <div class="card-icon icon-target">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
           </div>
-          <p class="card-label" data-i18n="card_target">평균 목표가</p>
+          <p class="card-label" data-i18n="card_target">Avg Target Price</p>
           <p class="card-value" id="val-target">—</p>
           <p class="card-sub" id="sub-target"></p>
         </div>
@@ -111,7 +111,7 @@
           <div class="card-icon icon-bias">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
           </div>
-          <p class="card-label" data-i18n="card_bias">평균 괴리율</p>
+          <p class="card-label" data-i18n="card_bias">Avg Bias %</p>
           <p class="card-value" id="val-bias">—</p>
           <p class="card-sub" id="sub-bias"></p>
         </div>
@@ -119,7 +119,7 @@
           <div class="card-icon icon-reports">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </div>
-          <p class="card-label" data-i18n="card_reports">리포트 수</p>
+          <p class="card-label" data-i18n="card_reports">Active Reports</p>
           <p class="card-value" id="val-reports">—</p>
           <p class="card-sub" id="sub-reports"></p>
         </div>
@@ -132,35 +132,35 @@
         <div class="realistic-header">
           <div class="realistic-title-badge">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            <span data-i18n="realistic_title">🎯 현실적 투자 목표가 분석 (증권사별 편향 보정 모델)</span>
+            <span data-i18n="realistic_title">🎯 Realistic Investment Targets (Bias Adjusted)</span>
           </div>
-          <div class="realistic-subtitle" data-i18n="realistic_sub">증권사별 고유 편향 오차(Bias)를 개별 반영하여 산출한 4대 통계 (최대 / 최소 / 중앙값 / 평균값)</div>
+          <div class="realistic-subtitle" data-i18n="realistic_sub">4 Core Statistics (Max / Min / Median / Mean) adjusted by individual analyst bias history</div>
         </div>
 
         <div class="realistic-stats-columns">
           <!-- Column 1: Raw Analyst Target Stats -->
           <div class="stats-group raw-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-raw" data-i18n="raw_badge">1. 증권사 단순 제시 목표가</span>
+              <span class="badge badge-raw" data-i18n="raw_badge">1. Raw Brokerage Target Prices</span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_max">최대값 (Max)</span>
+                <span class="stat-box-label" data-i18n="stat_max">Max Target</span>
                 <span class="stat-box-val" id="raw-stat-max">—</span>
                 <span class="stat-box-sub" id="raw-sub-max"></span>
               </div>
               <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_min">최소값 (Min)</span>
+                <span class="stat-box-label" data-i18n="stat_min">Min Target</span>
                 <span class="stat-box-val" id="raw-stat-min">—</span>
                 <span class="stat-box-sub" id="raw-sub-min"></span>
               </div>
               <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_med">중앙값 (Median)</span>
+                <span class="stat-box-label" data-i18n="stat_med">Median Target</span>
                 <span class="stat-box-val" id="raw-stat-med">—</span>
                 <span class="stat-box-sub" id="raw-sub-med"></span>
               </div>
               <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_avg">평균값 (Mean)</span>
+                <span class="stat-box-label" data-i18n="stat_avg">Mean Target</span>
                 <span class="stat-box-val" id="raw-stat-avg">—</span>
                 <span class="stat-box-sub" id="raw-sub-avg"></span>
               </div>
@@ -170,26 +170,26 @@
           <!-- Column 2: Firm-Adjusted Realistic Target Stats -->
           <div class="stats-group adj-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-adj" data-i18n="adj_badge">2. 🎯 현실적 투자 목표가 (증권사별 편향 보정)</span>
+              <span class="badge badge-adj" data-i18n="adj_badge">2. 🎯 Realistic Targets (Firm-Bias Adjusted)</span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box highlight-box">
-                <span class="stat-box-label" data-i18n="adj_stat_max">현실적 최대값 (Adj. Max)</span>
+                <span class="stat-box-label" data-i18n="adj_stat_max">Adj. Max Target</span>
                 <span class="stat-box-val val-green" id="adj-stat-max">—</span>
                 <span class="stat-box-sub" id="adj-sub-max"></span>
               </div>
               <div class="stat-box highlight-box">
-                <span class="stat-box-label" data-i18n="adj_stat_min">현실적 최소값 (Adj. Min)</span>
+                <span class="stat-box-label" data-i18n="adj_stat_min">Adj. Min Target</span>
                 <span class="stat-box-val val-blue" id="adj-stat-min">—</span>
                 <span class="stat-box-sub" id="adj-sub-min"></span>
               </div>
               <div class="stat-box highlight-box accent-border">
-                <span class="stat-box-label" data-i18n="adj_stat_med">현실적 중앙값 (Adj. Median)</span>
+                <span class="stat-box-label" data-i18n="adj_stat_med">Adj. Median Target</span>
                 <span class="stat-box-val val-yellow" id="adj-stat-med">—</span>
                 <span class="stat-box-sub" id="adj-sub-med"></span>
               </div>
               <div class="stat-box highlight-box main-target-border">
-                <span class="stat-box-label" data-i18n="adj_stat_avg">현실적 평균값 (Adj. Mean) ⭐</span>
+                <span class="stat-box-label" data-i18n="adj_stat_avg">Adj. Mean Target ⭐</span>
                 <span class="stat-box-val val-hero" id="adj-stat-avg">—</span>
                 <span class="stat-box-sub" id="adj-sub-avg"></span>
               </div>
@@ -198,7 +198,7 @@
         </div>
 
         <div class="realistic-footer-note" id="realistic-footer-note">
-          * 보정 산식: 각 증권사의 역대 목표가 편향율(B_firm)을 개별 반영(T_adj = T_raw / (1 + B_firm/100))하여 현실적 4대 통계량을 산출했습니다.
+          * Calculated by taking the single latest report per firm (within 90d) across firms and adjusting each target price by historical 1-yr bias: T_adj = T_raw / (1 + B_firm/100).
         </div>
       </div>
     </section>
@@ -208,12 +208,12 @@
       <div class="section-header">
         <h2 class="section-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          <span data-i18n="timeline_title">주가 + 목표가 타임라인</span>
+          <span data-i18n="timeline_title">Price & Target Timeline</span>
         </h2>
         <div class="scale-toggle-group" id="timeline-scale-toggles">
-          <button class="scale-btn active" data-scale="linear" data-i18n="scale_linear">📏 선형 (Linear)</button>
-          <button class="scale-btn" data-scale="log" data-i18n="scale_log">📊 로그 축 (Log Scale)</button>
-          <button class="scale-btn" data-scale="pct" data-i18n="scale_pct">🎯 괴리율 (%)</button>
+          <button class="scale-btn active" data-scale="linear" data-i18n="scale_linear">📏 Linear Scale</button>
+          <button class="scale-btn" data-scale="log" data-i18n="scale_log">📊 Log Scale</button>
+          <button class="scale-btn" data-scale="pct" data-i18n="scale_pct">🎯 Bias (%)</button>
         </div>
       </div>
       <div class="glass-panel chart-panel">
@@ -226,9 +226,9 @@
       <div class="section-header">
         <h2 class="section-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-          <span data-i18n="ranking_title">증권사별 Bias 랭킹</span>
+          <span data-i18n="ranking_title">Firm Bias Ranking</span>
         </h2>
-        <p class="section-desc" data-i18n="ranking_sub">현재 선택된 종목에 대한 증권사 목표가 괴리율 비교</p>
+        <p class="section-desc" data-i18n="ranking_sub">Average analyst target price bias by firm for selected stock</p>
       </div>
       <div class="glass-panel chart-panel">
         <div id="chart-bias-ranking"></div>
@@ -242,7 +242,7 @@
         <div class="section-header">
           <h2 class="section-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            <span data-i18n="heatmap_title">증권사 × 종목 히트맵</span>
+            <span data-i18n="heatmap_title">Firm × Stock Heatmap</span>
           </h2>
         </div>
         <div class="glass-panel chart-panel">
@@ -255,9 +255,9 @@
         <div class="section-header">
           <h2 class="section-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            <span data-i18n="accuracy_title">예측 정확도 트렌드</span>
+            <span data-i18n="accuracy_title">Prediction Accuracy Trend</span>
           </h2>
-          <p class="section-desc" data-i18n="accuracy_sub">리포트 수 상위 5개 증권사</p>
+          <p class="section-desc" data-i18n="accuracy_sub">Top 5 coverage firms rolling bias trend</p>
         </div>
         <div class="glass-panel chart-panel">
           <div id="chart-accuracy"></div>
@@ -270,10 +270,10 @@
       <div class="section-header">
         <h2 class="section-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span data-i18n="table_title">전체 리포트 목록</span>
+          <span data-i18n="table_title">All Research Reports</span>
         </h2>
         <div class="table-controls">
-          <input type="text" id="table-search" class="table-search" placeholder="검색 (증권사, 종목, 애널리스트...)" data-i18n-ph="table_search_placeholder" />
+          <input type="text" id="table-search" class="table-search" placeholder="Search (Firm, Stock, Analyst...)" data-i18n-ph="table_search_placeholder" />
         </div>
       </div>
       <div class="glass-panel table-panel">
@@ -281,20 +281,20 @@
           <table class="report-table" id="report-table">
             <thead>
               <tr>
-                <th data-sort="date" class="sortable active-sort"><span data-i18n="th_date">날짜</span> <span class="sort-icon">▼</span></th>
-                <th data-sort="stock" class="sortable"><span data-i18n="th_stock">종목</span> <span class="sort-icon">⇅</span></th>
-                <th data-sort="firm" class="sortable"><span data-i18n="th_firm">증권사</span> <span class="sort-icon">⇅</span></th>
-                <th data-sort="analyst" class="sortable"><span data-i18n="th_analyst">애널리스트</span> <span class="sort-icon">⇅</span></th>
-                <th data-sort="target" class="sortable"><span data-i18n="th_target">목표가</span> <span class="sort-icon">⇅</span></th>
-                <th data-sort="bias" class="sortable"><span data-i18n="th_bias">괴리율(%)</span> <span class="sort-icon">⇅</span></th>
-                <th data-i18n="th_category">카테고리</th>
+                <th data-sort="date" class="sortable active-sort"><span data-i18n="th_date">Date</span> <span class="sort-icon">▼</span></th>
+                <th data-sort="stock" class="sortable"><span data-i18n="th_stock">Stock</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="firm" class="sortable"><span data-i18n="th_firm">Firm</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="analyst" class="sortable"><span data-i18n="th_analyst">Analyst</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="target" class="sortable"><span data-i18n="th_target">Target Price</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="bias" class="sortable"><span data-i18n="th_bias">Bias (%)</span> <span class="sort-icon">⇅</span></th>
+                <th data-i18n="th_category">Category</th>
               </tr>
             </thead>
             <tbody id="report-tbody"></tbody>
           </table>
         </div>
         <div class="table-footer">
-          <span id="table-count">총 0건</span>
+          <span id="table-count">Total 0 reports</span>
           <div class="pagination" id="pagination"></div>
         </div>
       </div>
@@ -302,7 +302,7 @@
   </main>
 
   <footer class="footer">
-    <p data-i18n="footer">© 2026 주식 컨센서스 예측 분석 시스템 &nbsp;|&nbsp; 데이터는 참고용이며 투자 권유가 아닙니다.</p>
+    <p data-i18n="footer">© 2026 Stock Consensus Prediction Analytics &nbsp;|&nbsp; For informational purposes only, not investment advice.</p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.0"></script>
