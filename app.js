@@ -801,7 +801,7 @@
     const chartColors = [...scatterColors, '#6366f1'];
     const strokeWidths = [...Array(firmCount).fill(0), 3.5];
     const markerSizes = [...Array(firmCount).fill(3.8), 0];
-    const opacities = [...Array(firmCount).fill(0.85), 1];
+    const opacities = [...Array(firmCount).fill(0.5), 1.0];
 
     const opts = {
       series,
