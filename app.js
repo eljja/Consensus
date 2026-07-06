@@ -120,7 +120,7 @@
       th_firm: '증권사',
       th_analyst: '애널리스트',
       th_target: '목표가',
-      th_bias: '괴리율(%)',
+      th_bias: '발표 당시 괴리율(%)',
       th_category: '카테고리',
       table_total: '총 {count}건',
       footer: '© 2026 주식 컨센서스 예측 분석 시스템 | 데이터는 참고용이며 투자 권유가 아닙니다.',
@@ -129,12 +129,13 @@
       cat_accurate: '적정',
       cat_conservative: '보수적',
       chart_price_legend: '주가',
-      chart_price_base: '기준 (현재가)',
-      chart_bias_title: '목표가 괴리율 (%)',
+      chart_price_base: '기준 (발표 당시 주가)',
+      chart_bias_title: '발표 당시 목표가 괴리율 (%)',
       chart_price_linear_title: '주가 / 목표가 (선형 축)',
       chart_price_log_title: '주가 / 목표가 (로그 축)',
       grade: '등급',
-      bias: '괴리율',
+      bias: '발표 당시 괴리율',
+      date_price: '발표 당시 주가',
       target_price: '목표가'
     },
     en: {
@@ -181,7 +182,7 @@
       th_firm: 'Firm',
       th_analyst: 'Analyst',
       th_target: 'Target Price',
-      th_bias: 'Bias (%)',
+      th_bias: 'Issuance Bias (%)',
       th_category: 'Category',
       table_total: 'Total {count} reports',
       footer: '© 2026 Stock Consensus Analytics | For informational purposes only, not investment advice.',
@@ -190,12 +191,13 @@
       cat_accurate: 'Accurate',
       cat_conservative: 'Conservative',
       chart_price_legend: 'Stock Price',
-      chart_price_base: 'Baseline (Current Price)',
-      chart_bias_title: 'Target Price Bias (%)',
+      chart_price_base: 'Baseline (Price on Date)',
+      chart_bias_title: 'Issuance Bias (%)',
       chart_price_linear_title: 'Price / Target (Linear)',
       chart_price_log_title: 'Price / Target (Log Scale)',
       grade: 'Grade',
-      bias: 'Bias',
+      bias: 'Issuance Bias',
+      date_price: 'Price on Date',
       target_price: 'Target Price'
     }
   };
@@ -265,6 +267,42 @@
     if (val == null) return '—';
     const sign = val > 0 ? '+' : '';
     return sign + val.toFixed(1) + '%';
+  }
+
+  function getPriceOnDate(priceHistory, targetDateStr) {
+    if (!priceHistory || !priceHistory.length) return null;
+    if (!priceHistory._map) {
+      const map = {};
+      priceHistory.forEach(p => { map[p.date] = p.close; });
+      const sorted = Object.keys(map).sort();
+      Object.defineProperty(priceHistory, '_map', { value: map, enumerable: false });
+      Object.defineProperty(priceHistory, '_sorted', { value: sorted, enumerable: false });
+    }
+    const map = priceHistory._map;
+    const sorted = priceHistory._sorted;
+
+    if (map[targetDateStr]) return map[targetDateStr];
+
+    let low = 0, high = sorted.length - 1, best = null;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      if (sorted[mid] <= targetDateStr) {
+        best = map[sorted[mid]];
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return best;
+  }
+
+  function getReportIssuanceBias(stock, r) {
+    if (!r || r.target_price == null || r.target_price <= 0) return null;
+    const pDate = getPriceOnDate(stock.price_history, r.date);
+    if (pDate && pDate > 0) {
+      return ((r.target_price - pDate) / pDate) * 100;
+    }
+    return r.current_bias_pct;
   }
 
   function biasCategory(bias) {
@@ -480,7 +518,7 @@
     const targets = activeReports.map(r => r.target_price);
     const avgTarget = targets.length ? targets.reduce((a, b) => a + b, 0) / targets.length : null;
 
-    const biases = activeReports.map(r => r.current_bias_pct).filter(b => b != null);
+    const biases = activeReports.map(r => getReportIssuanceBias(stock, r)).filter(b => b != null);
     const avgBias = biases.length ? biases.reduce((a, b) => a + b, 0) / biases.length : null;
 
     // Price
@@ -530,26 +568,7 @@
     const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
     const priceHist = stock.price_history || [];
 
-    const priceMap = {};
-    priceHist.forEach(p => { priceMap[p.date] = p.close; });
-    const sortedDates = Object.keys(priceMap).sort();
-
-    const getPriceOnDate = (dtStr) => {
-      if (priceMap[dtStr]) return priceMap[dtStr];
-      let low = 0, high = sortedDates.length - 1, best = null;
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        if (sortedDates[mid] <= dtStr) {
-          best = priceMap[sortedDates[mid]];
-          low = mid + 1;
-        } else {
-          high = mid - 1;
-        }
-      }
-      return best;
-    };
-
-    const maxHistDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : '';
+    const maxHistDate = priceHist.length ? priceHist[priceHist.length - 1].date : '';
     const firmBiasListMap = {};
 
     allReports.forEach(r => {
@@ -562,7 +581,7 @@
       const dt1yStr = dt1y.toISOString().split('T')[0];
 
       if (dt1yStr <= maxHistDate) {
-        const p1y = getPriceOnDate(dt1yStr);
+        const p1y = getPriceOnDate(priceHist, dt1yStr);
         if (p1y && p1y > 0) {
           const bias1y = ((r.target_price - p1y) / p1y) * 100;
           if (bias1y >= -70 && bias1y <= 200) {
@@ -627,7 +646,7 @@
   }
 
   // ── State for Timeline Scale Mode ──
-  let currentScaleMode = 'linear';
+  let currentScaleMode = 'log';
 
   function initScaleToggles() {
     const container = document.getElementById('timeline-scale-toggles');
@@ -669,16 +688,19 @@
 
       const firmMap = {};
       (stock.analyst_reports || []).forEach(r => {
-        if (r.current_bias_pct == null) return;
+        const issuanceBias = getReportIssuanceBias(stock, r);
+        if (issuanceBias == null) return;
         const displayName = getFirmName(r.firm);
+        const reportPrice = getPriceOnDate(stock.price_history, r.date);
         if (!firmMap[displayName]) firmMap[displayName] = [];
         firmMap[displayName].push({
           x: new Date(r.date).getTime(),
-          y: r.current_bias_pct,
+          y: parseFloat(issuanceBias.toFixed(1)),
           firm: displayName,
           analyst: r.analyst,
           target_price: r.target_price,
-          bias: r.current_bias_pct,
+          report_price: reportPrice,
+          bias: issuanceBias,
           grade: r.grade
         });
       });
@@ -708,6 +730,8 @@
       const firmMap = {};
       (stock.analyst_reports || []).forEach(r => {
         const displayName = getFirmName(r.firm);
+        const reportPrice = getPriceOnDate(stock.price_history, r.date);
+        const issuanceBias = getReportIssuanceBias(stock, r);
         if (!firmMap[displayName]) firmMap[displayName] = [];
         firmMap[displayName].push({
           x: new Date(r.date).getTime(),
@@ -715,7 +739,8 @@
           firm: displayName,
           analyst: r.analyst,
           target_price: r.target_price,
-          bias: r.current_bias_pct,
+          report_price: reportPrice,
+          bias: issuanceBias,
           grade: r.grade
         });
       });
@@ -824,11 +849,13 @@
               <div style="font-weight:700;">${isPct ? dict.chart_price_base : dict.chart_price_legend + ': ' + formatPrice(point.y, stock.market)}</div>
             </div>`;
           }
-          return `<div style="padding:10px 14px;font-size:12px;max-width:240px;">
+          const datePriceStr = point.report_price ? `<div>${dict.date_price}: <strong>${formatPrice(point.report_price, stock.market)}</strong></div>` : '';
+          return `<div style="padding:10px 14px;font-size:12px;max-width:260px;">
             <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${dateStr}</div>
             <div style="font-weight:700;margin-bottom:2px;">${point.firm}</div>
-            ${point.analyst ? `<div style="color:rgba(255,255,255,.5);">${point.analyst}</div>` : ''}
-            <div style="margin-top:6px;">${dict.target_price}: <strong>${formatPrice(point.target_price || point.y, stock.market)}</strong></div>
+            ${point.analyst ? `<div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${point.analyst}</div>` : ''}
+            ${datePriceStr}
+            <div>${dict.target_price}: <strong>${formatPrice(point.target_price || point.y, stock.market)}</strong></div>
             ${point.grade ? `<div>${dict.grade}: ${point.grade}</div>` : ''}
             ${point.bias != null ? `<div>${dict.bias}: <span style="color:${biasColor(point.bias)}">${formatPercent(point.bias)}</span></div>` : ''}
           </div>`;
@@ -850,6 +877,7 @@
     const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
     if (stock && stock.analyst_reports) {
       stock.analyst_reports.forEach(r => {
+        const issuanceBias = getReportIssuanceBias(stock, r);
         allTableData.push({
           date: r.date,
           stock: getStockName(stock),
@@ -859,7 +887,7 @@
           raw_firm: r.firm,
           analyst: r.analyst || '—',
           target: r.target_price,
-          bias: r.current_bias_pct,
+          bias: issuanceBias,
           grade: r.grade || '',
           action: r.action || ''
         });
@@ -877,10 +905,11 @@
 
     const firmBias = {};
     (stock.analyst_reports || []).forEach(r => {
-      if (r.current_bias_pct == null) return;
+      const issuanceBias = getReportIssuanceBias(stock, r);
+      if (issuanceBias == null) return;
       const name = getFirmName(r.firm);
       if (!firmBias[name]) firmBias[name] = [];
-      firmBias[name].push(r.current_bias_pct);
+      firmBias[name].push(issuanceBias);
     });
 
     const entries = Object.entries(firmBias).map(([firm, vals]) => ({

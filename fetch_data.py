@@ -468,6 +468,13 @@ def compute_bias(reports: list[dict], price_history: list[dict], current_price: 
         else:
             r["current_bias_pct"] = None
 
+        # Issuance bias: target vs stock price on report publication date
+        report_date_price = get_price_on_date(price_history, r["date"])
+        if report_date_price and report_date_price > 0:
+            r["issuance_bias_pct"] = round((tp - report_date_price) / report_date_price * 100, 1)
+        else:
+            r["issuance_bias_pct"] = None
+
         # Realized bias: target vs actual price 12 months later
         try:
             report_date = datetime.strptime(r["date"], "%Y-%m-%d")
@@ -483,7 +490,7 @@ def compute_bias(reports: list[dict], price_history: list[dict], current_price: 
         except Exception:
             r["realized_bias_pct"] = None
 
-        bias_val = r["current_bias_pct"] if r["current_bias_pct"] is not None else r["realized_bias_pct"]
+        bias_val = r["issuance_bias_pct"] if r["issuance_bias_pct"] is not None else r["current_bias_pct"]
         r["bias_category"] = classify_bias(bias_val)
 
 # ---------------------------------------------------------------------------
