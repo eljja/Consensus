@@ -145,6 +145,64 @@ def sanitize_nan(obj):
     return obj
 
 
+def fetch_splits(ticker_symbol: str) -> list[tuple[str, float]]:
+    """Fetch and deduplicate split history for a ticker using yfinance."""
+    try:
+        t = yf.Ticker(ticker_symbol)
+        splits_series = t.splits
+        if splits_series.empty:
+            return []
+        items = []
+        for dt, ratio in splits_series.items():
+            dt_str = dt.strftime("%Y-%m-%d")
+            items.append((dt_str, float(ratio)))
+        
+        items.sort(key=lambda x: x[0])
+        
+        # Deduplicate splits: if dates are within 30 days and ratios are same, keep only first
+        cleaned = []
+        for dt_str, ratio in items:
+            is_duplicate = False
+            dt_obj = datetime.strptime(dt_str, "%Y-%m-%d")
+            for prev_dt, prev_ratio in cleaned:
+                prev_obj = datetime.strptime(prev_dt, "%Y-%m-%d")
+                if abs((dt_obj - prev_obj).days) <= 30 and abs(ratio - prev_ratio) / prev_ratio < 0.001:
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                cleaned.append((dt_str, ratio))
+        return cleaned
+    except Exception as e:
+        print(f"  ⚠️ Error fetching splits for {ticker_symbol}: {e}")
+        return []
+
+
+def adjust_reports_for_splits(reports: list[dict], splits_list: list[tuple[str, float]]):
+    """Adjust target_price and prior_target in reports for subsequent stock splits, supporting raw target caching."""
+    if not splits_list:
+        return
+    for r in reports:
+        r_date = r.get("date")
+        if not r_date:
+            continue
+        
+        raw_tp = r.get("target_price_raw", r.get("target_price"))
+        raw_pt = r.get("prior_target_raw", r.get("prior_target"))
+        
+        factor = 1.0
+        for s_date, ratio in splits_list:
+            if s_date > r_date:
+                factor *= ratio
+        
+        if factor != 1.0:
+            if raw_tp is not None:
+                r["target_price_raw"] = raw_tp
+                r["target_price"] = round(raw_tp / factor, 2)
+            if raw_pt is not None:
+                r["prior_target_raw"] = raw_pt
+                r["prior_target"] = round(raw_pt / factor, 2)
+
+
 def naver_request(url: str) -> str:
     """Fetch a Naver Finance page, decode as cp949."""
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -609,6 +667,10 @@ def main():
         merged.sort(key=lambda x: x["date"], reverse=True)
         reports = merged
 
+        # Adjust for stock splits
+        splits = fetch_splits(ticker)
+        adjust_reports_for_splits(reports, splits)
+
         current_price = price_hist[-1]["close"] if price_hist else 0
         compute_bias(reports, price_hist, current_price)
         all_stocks[ticker] = {
@@ -644,6 +706,7 @@ def main():
     # 3c. Hankyung API (per stock)
     print("\n📊 Fetching Hankyung Consensus data (supplementary)...")
     for code, name in KR_STOCKS.items():
+        yf_ticker = f"{code}.KS"
         print(f"  🔍 Hankyung: {code} ({name})...")
         hk_reports = fetch_hankyung_kr_targets(code)
         print(f"    ✅ {len(hk_reports)} reports")
@@ -666,6 +729,10 @@ def main():
         
         final_merged.sort(key=lambda x: x["date"], reverse=True)
         final_merged = [r for r in final_merged if r.get("target_price") and r["target_price"] > 0]
+
+        # Adjust for stock splits
+        splits = fetch_splits(yf_ticker)
+        adjust_reports_for_splits(final_merged, splits)
 
         current_price = all_stocks[code]["current_price"]
         price_hist = all_stocks[code]["price_history"]
