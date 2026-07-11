@@ -85,8 +85,8 @@ KR_STOCKS = {
     "034020": "두산에너빌리티",
 }
 
-# How many years of Naver Finance research pages to scan (10 years)
-NAVER_SCAN_YEARS = 10
+# How many years of Naver Finance research pages to scan (55 days for incremental update)
+NAVER_SCAN_YEARS = 0.15
 
 # Rate-limiting delays (seconds)
 NAVER_LIST_DELAY = 0.3
@@ -395,6 +395,7 @@ def fetch_hankyung_kr_targets(stock_code: str) -> list[dict]:
     }
     all_reports = []
     page = 1
+    cutoff_date_str = (datetime.now() - timedelta(days=55)).strftime("%Y-%m-%d")
     while True:
         params = urllib.parse.urlencode({"page": page, "businessCode": stock_code})
         url = f"{base}?{params}"
@@ -410,12 +411,16 @@ def fetch_hankyung_kr_targets(stock_code: str) -> list[dict]:
         if not items:
             break
 
+        has_older = False
         for item in items:
+            date_str = item.get("REPORT_DATE", "")
+            if date_str and date_str < cutoff_date_str:
+                has_older = True
             tp = safe_float(item.get("TARGET_STOCK_PRICES"))
             if tp is None or tp == 0:
                 continue
             all_reports.append({
-                "date": item.get("REPORT_DATE", ""),
+                "date": date_str,
                 "firm": item.get("OFFICE_NAME", ""),
                 "analyst": item.get("REPORT_WRITER", ""),
                 "target_price": tp,
@@ -424,6 +429,9 @@ def fetch_hankyung_kr_targets(stock_code: str) -> list[dict]:
                 "action": "",
                 "source": "hankyung",
             })
+
+        if has_older:
+            break
 
         if page >= data.get("last_page", page):
             break
@@ -561,6 +569,21 @@ def main():
     print("  Stock Consensus Bias Analysis — Data Fetcher (40 Stocks)")
     print("=" * 60)
 
+    # ── Load existing data for incremental updates ───────────────
+    existing_data = {}
+    stocks_dir = OUTPUT_DIR / "stocks"
+    if stocks_dir.exists():
+        print("📁 Loading existing analyst reports from stocks/*.json for incremental update...")
+        for f in stocks_dir.glob("*.json"):
+            try:
+                with open(f, "r", encoding="utf-8") as file:
+                    detail = json.load(file)
+                    existing_data[f.stem] = detail
+            except Exception as e:
+                print(f"  ⚠️ Error loading {f.name}: {e}")
+    else:
+        print("📁 No existing stocks directory found. Doing full scan from config.")
+
     all_stocks: dict[str, dict] = {}
 
     # ── US Stocks (20) ─────────────────────────────────────────
@@ -569,6 +592,23 @@ def main():
         print(f"\n── {ticker} ({name}) ──")
         price_hist = fetch_price_history(ticker, period="10y")
         reports = fetch_us_analyst_targets(ticker)
+        
+        # Merge with existing reports
+        existing_reports = []
+        if ticker in existing_data:
+            existing_reports = existing_data[ticker].get("analyst_reports", [])
+        
+        seen = set()
+        merged = []
+        for r in reports + existing_reports:
+            key = (r["date"], r["firm"])
+            if key not in seen:
+                seen.add(key)
+                merged.append(r)
+        
+        merged.sort(key=lambda x: x["date"], reverse=True)
+        reports = merged
+
         current_price = price_hist[-1]["close"] if price_hist else 0
         compute_bias(reports, price_hist, current_price)
         all_stocks[ticker] = {
@@ -610,13 +650,28 @@ def main():
 
         nv = naver_reports.get(code, [])
         merged = merge_kr_reports(nv, hk_reports)
-        merged = [r for r in merged if r.get("target_price") and r["target_price"] > 0]
+        
+        # Merge with existing reports
+        existing_reports = []
+        if code in existing_data:
+            existing_reports = existing_data[code].get("analyst_reports", [])
+        
+        seen = set()
+        final_merged = []
+        for r in merged + existing_reports:
+            key = (r["date"], r["firm"])
+            if key not in seen:
+                seen.add(key)
+                final_merged.append(r)
+        
+        final_merged.sort(key=lambda x: x["date"], reverse=True)
+        final_merged = [r for r in final_merged if r.get("target_price") and r["target_price"] > 0]
 
         current_price = all_stocks[code]["current_price"]
         price_hist = all_stocks[code]["price_history"]
-        compute_bias(merged, price_hist, current_price)
-        all_stocks[code]["analyst_reports"] = merged
-        print(f"    📊 Total merged: {len(merged)} reports")
+        compute_bias(final_merged, price_hist, current_price)
+        all_stocks[code]["analyst_reports"] = final_merged
+        print(f"    📊 Total merged: {len(final_merged)} reports")
         time.sleep(HANKYUNG_DELAY)
 
     # ── Firm stats ─────────────────────────────────────────────
