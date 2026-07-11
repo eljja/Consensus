@@ -1,78 +1,195 @@
-# 📊 주식 컨센서스 예측 분석 대시보드
+# 📊 Stock Consensus & Bias Analytics Dashboard (주식 컨센서스 예측 분석 시스템)
 
-증권사/애널리스트의 주식 목표가 예측 데이터를 전수 수집·분석하여, 각 증권사가 어느 정도로 낙관적/보수적으로 예측했는지 주가 흐름과 비교 시각화하는 인터랙티브 대시보드입니다.
+A premium interactive dashboard that collects, cleans, and analyzes analyst target prices and actual price histories for 40 major US/KR stocks. It computes historical analyst forecasting bias and estimates realistic, bias-adjusted investment targets.
 
-🌐 **GitHub Pages 대시보드 URL**: [https://eljja.github.io/Consensus/](https://eljja.github.io/Consensus/)
+증권사 및 애널리스트들의 목표가 예측 데이터를 전수 수집·분석하여, 각 증권사별 과거 편향(Bias)을 계량화하고 이를 보정한 **현실적 투자 목표가(Realistic Target)**와 발표 당시의 **진짜 괴리율**을 실시간으로 시각화하는 인터랙티브 대시보드입니다.
 
-## 🎯 주요 기능
+🌐 **Live Dashboard (라이브 데모)**:
+- 🇰🇷 **Korean Version (국문판)**: [https://eljja.github.io/Consensus/](https://eljja.github.io/Consensus/)
+- 🇺🇸 **English Version (영문판)**: [https://eljja.github.io/Consensus/index_en.html](https://eljja.github.io/Consensus/index_en.html)
 
-- **종목 검색 및 간편 전환**: 총 40개 대표 종목(미국 20개 + 한국 20개) 실시간 검색 및 필터링
-- **주가 + 목표가 타임라인**: 실제 주가 추세선 위에 증권사별 목표가를 시점별 산점도로 표시 (마우스 호버 시 상세 정보)
-- **증권사별 Bias 랭킹**: 현재/과거 목표가 괴리율 기준 증권사 정렬 (과대 긍정적 / 보수적)
-- **증권사 × 종목 히트맵**: 증권사별로 특정 종목에 대해 어떤 예측 성향을 보였는지 매트릭스 시각화
-- **예측 정확도 트렌드**: 시간에 따른 증권사별 평균 오차율 추이
-- **전수 리포트 목록**: 검색, 정렬, 페이징 지원 상세 표
+---
 
-## 📈 대상 종목 (총 40개)
+## 🗺️ Table of Contents (목차)
+- [🇰🇷 한국어 문서 (Korean Documentation)](#-한국어-문서-korean-documentation)
+  - [1. 프로젝트 소개 및 특징](#1-프로젝트-소개-및-특징)
+  - [2. 핵심 모델 및 분석 전략 (Methodology)](#2-핵심-모델-및-분석-전략-methodology)
+  - [3. 데이터 파이프라인 및 아키텍처](#3-데이터-파이프라인-및-아키텍처)
+  - [4. 현재 개발 및 데이터 반영 현황](#4-현재-개발-및-데이터-반영-현황)
+  - [5. 실행 주기 및 로컬 실행 가이드](#5-실행-주기-및-로컬-실행-가이드)
+- [🇺🇸 English Documentation (영문 Documentation)](#-english-documentation-영문-문서)
+  - [1. Project Overview & Features](#1-project-overview--features)
+  - [2. Core Methodology & Strategy](#2-core-methodology--strategy)
+  - [3. Data Pipeline & Architecture](#3-data-pipeline--architecture)
+  - [4. Project Status & Milestones](#4-project-status--milestones)
+  - [5. Execution Cycles & Local Development Guide](#5-execution-cycles--local-development-guide)
 
-### 🇺🇸 US 대표 종목 (20개)
-AAPL (Apple), MSFT (Microsoft), NVDA (NVIDIA), AMZN (Amazon), GOOGL (Alphabet), META (Meta), TSLA (Tesla), LLY (Eli Lilly), AVGO (Broadcom), JPM (JPMorgan Chase), WMT (Walmart), V (Visa), MA (Mastercard), NFLX (Netflix), AMD (Advanced Micro Devices), DIS (Walt Disney), ORCL (Oracle), COST (Costco), PEP (PepsiCo), KO (Coca-Cola)
+---
 
-### 🇰🇷 KR 대표 종목 (20개)
-삼성전자, SK하이닉스, LG에너지솔루션, 삼성바이오로직스, 현대차, 셀트리온, POSCO홀딩스, NAVER, 기아, 카카오, KB금융, 신한지주, 삼성화재, 현대모비스, LG화학, 삼성SDI, 삼성물산, 삼성생명, 한국전력, 두산에너빌리티
+# 🇰🇷 한국어 문서 (Korean Documentation)
 
-## 🚀 GitHub Pages 배포 설정
+## 1. 프로젝트 소개 및 특징
+본 프로젝트는 국내외 40대 대표 기업(미국 빅테크 20개 + 한국 시총 상위 20개)에 대하여 발표된 증권사 리포트 데이터를 분석합니다. 증권사의 지나치게 낙관적인 예측 관행(Bullish Bias)을 객관적인 데이터로 검증하고 보정하는 것을 목적으로 합니다.
 
-1. GitHub 저장소 ([https://github.com/eljja/Consensus](https://github.com/eljja/Consensus))로 이동
-2. **Settings** → **Pages** 탭 클릭
-3. **Build and deployment** > **Source**를 `Deploy from a branch`로 설정
-4. **Branch**를 `main` / `/ (root)` 선택 후 **Save** 클릭
-5. 1~2분 후 `https://eljja.github.io/Consensus/` 에서 서비스가 활성화됩니다.
+- **글래스모피즘 디자인**: 유려한 다크 모드 테마와 부드러운 차트 모션 제공.
+- **다국어 및 다통화 지원**: 한국어/영어 전환 및 USD/KRW 실시간 환산(고정 환율 $1 = ₩1,380$) 기능 지원.
+- **비동기 지연 로딩(Lazy Loading)**: 메인 페이지 로딩 속도를 높이기 위해 9MB 크기의 원본 데이터를 개별 종목 JSON 파일로 분리하고, 사용자 상호작용 시점에만 동적으로 패치하여 빠른 성능을 달성하였습니다.
 
-## 🔄 데이터 업데이트 시 (로컬)
+---
 
-```bash
-pip install -r requirements.txt
-python fetch_data.py
-git add data.json README.md index.html app.js fetch_data.py
-git commit -m "update: 40 stocks consensus dataset"
-$env:GITHUB_TOKEN=""; git push origin main
+## 2. 핵심 모델 및 분석 전략 (Methodology)
+
+### A. 발표 당시 괴리율 (Issuance Bias %)
+과거 리포트의 괴리율을 오늘의 주가와 비교하는 왜곡을 제거하고, **리포트가 발간된 그 당일의 주가**와 비교하여 증권사가 실제로 부여했던 목표 프리미엄을 정확히 계산합니다.
+$$\text{발표 당시 괴리율 (\%)} = \frac{\text{목표가 (Target Price)} - \text{발표 당일 주가 (Price on Report Date)}}{\text{발표 당일 주가 (Price on Report Date)}} \times 100$$
+
+- **차트 괴리율(%) 모드**: Y축의 0%선(Baseline)이 '발표 당일 주가'를 나타내므로, 증권사가 시점별로 주가 대비 얼마나 높은 프리미엄을 부여했는지 왜곡 없이 비교 가능합니다.
+
+### B. 편향 보정 현실적 목표가 (Realistic Target Price)
+각 증권사별로 지난 수년간 발표한 리포트의 **1년 실현 괴리율(1-Year Realized Bias)**의 평균을 계산하여 증권사별 고유 편향 지수(Bias Index)를 산출하고, 이를 바탕으로 가공되지 않은 생(Raw) 목표가를 합리적으로 하향/상향 조정합니다.
+$$\text{보정 목표가 } (T_{adj}) = \frac{\text{발표 목표가 } (T_{raw})}{1 + \frac{\text{증권사 평균 편향 } (B_{firm})}{100}}$$
+
+- **4대 통계 지표 산출**: 이렇게 편향이 보정된 활성 리포트(최근 90일 내)들을 취합하여 보정된 최대치(Max), 최소치(Min), 중앙값(Median), 평균치(Mean)를 산출하여 현실적인 투자 범위를 제시합니다.
+- **종목별 감도 컬러 코딩**: 현재가 대비 보정 중앙값(Realistic Median)의 괴리에 따라 종목별 선택 필(Pill)의 색상 강도(붉은색: 상승 여력 높음, 푸른색: 하락 가능성 높음)가 다이내믹하게 변화합니다.
+
+---
+
+## 3. 데이터 파이프라인 및 아키텍처
+
+시스템은 데이터 갱신 비용을 극적으로 낮추기 위해 **증분 수집 및 병합 엔진**으로 구현되어 있습니다.
+
+```mermaid
+graph TD
+    A[yfinance API] -->|US 주가 및 10년 예측 데이터| D[fetch_data.py <br>증분 수집 엔진]
+    B[네이버 금융 크롤러] -->|KR 최근 55일 리포트 데이터 수집| D
+    C[한경 컨센서스 API] -->|KR 최근 55일 보완 데이터 수집| D
+    E[기존 저장된 stocks/*.json] -->|과거 10년사 데이터 누적분| D
+    D -->|시간순 정렬 및 중복 제거| F[정제된 리포트 데이터셋]
+    F -->|발표 당시 괴리율 및 1년 실현 괴리율 계산| G[예측 편향 연산 엔진]
+    G -->|증권사별 통계 및 보정 목표가 도출| H[최종 산출물 분할 생성]
+    H -->|summary.json 메타파일 갱신| I[(GitHub Pages 배포 디렉토리)]
+    H -->|개별 stocks/ticker.json 갱신| I
+    I -->|클라이언트 비동기 lazy-load| J[app.js / HTML 웹 대시보드]
+    J -->|차트 렌더링| K[ApexCharts 타임라인 & 히트맵]
 ```
 
-## 📁 프로젝트 구조
+---
 
+## 4. 현재 개발 및 데이터 반영 현황
+- **데이터 최종 업데이트**: **`2026-07-10`** (주말 제외 최신 영업일 기준 컨센서스 반영 완료)
+- **누적 데이터 규모**: 미국/한국 대표 40대 기업의 약 **`19,250건`** 애널리스트 리포트 데이터셋 수록.
+- **완료된 마일스톤**:
+  1. 한국어/영어 다국어 이원화 및 통화 실시간 변환 엔진 탑재.
+  2. 차트 기본 축을 **로그 축(Log Scale)**으로 설정하여 급격한 주가 변화율 왜곡 극복.
+  3. 차트 겹침 가독성을 해결하기 위해 **Scatter(점) 투명도 50% 적용** 및 **주가 선 최상단 레이어 배치** 완료.
+  4. 대용량 `data.json` 파일을 Git 추적에서 제외(untrack)하고 `robots.txt`, `sitemap.xml`을 제공하여 구글 검색 엔진에 색인 완료.
+
+---
+
+## 5. 실행 주기 및 로컬 실행 가이드
+
+### A. 데이터 업데이트 주기
+- 본 저장소의 데이터는 주기적으로 `fetch_data.py`를 실행하여 갱신합니다.
+- 증분 수집 방식이 적용되어 매 실행 시 단 3~4분 만에 40개 종목의 실시간 주가와 신규 리포트 병합이 완료됩니다.
+
+### B. 로컬 설치 및 실행 방법
+1. 저장소 클론 및 패키지 설치:
+   ```bash
+   git clone https://github.com/eljja/Consensus.git
+   cd Consensus
+   pip install -r requirements.txt
+   ```
+2. 데이터 수집 및 가공 스크립트 실행:
+   ```bash
+   python fetch_data.py
+   ```
+3. 로컬 테스트 서버 구동 (혹은 index.html을 브라우저로 직접 실행):
+   ```bash
+   # Python 기본 서버 예시
+   python -m http.server 8000
+   # 이후 브라우저에서 http://localhost:8000 접속
+   ```
+
+---
+
+# 🇺🇸 English Documentation (영문 문서)
+
+## 1. Project Overview & Features
+This repository features an interactive dark-mode analytics dashboard tracking forecasting accuracy, bias patterns, and true target premiums for 40 leading US and South Korean stocks.
+
+- **Bilingual & Multi-currency**: Instant toggle between English and Korean, alongside automated USD/KRW currency conversion.
+- **Asynchronous Lazy Loading**: The frontend avoids downloading a heavy 9MB bundle. It fetches the lightweight metadata file `summary.json` initially, then pulls detailed stock JSONs (`stocks/{ticker}.json`) dynamically on demand.
+
+---
+
+## 2. Core Methodology & Strategy
+
+### A. Issuance Bias (%)
+Calculates target price premium against the **stock close price on the actual report publication date** to eliminate historical timeline bias.
+$$\text{Issuance Bias (\%)} = \frac{\text{Target Price} - \text{Price on Report Date}}{\text{Price on Report Date}} \times 100$$
+
+### B. Bias-Adjusted Realistic Target Prices
+Computes each brokerage's historical **1-Year Realized Bias** to calculate their unique bias factor ($B_{firm}$). The raw target prices are adjusted using this factor:
+$$\text{Adjusted Target } (T_{adj}) = \frac{\text{Raw Target } (T_{raw})}{1 + \frac{\text{Firm Average Bias } (B_{firm})}{100}}$$
+
+- **Dynamic Color Coding**: Stock selector pills dynamically scale their color intensity (Soft Red for positive upside potential, Soft Blue for downside risk) based on the deviation between the current price and the Realistic Median.
+
+---
+
+## 3. Data Pipeline & Architecture
+
+```mermaid
+graph TD
+    A[yfinance API] -->|US Price & 10y Consensus Data| D[fetch_data.py <br>Incremental Fetcher]
+    B[Naver Finance Scraper] -->|KR Reports last 55d| D
+    C[Hankyung Consensus API] -->|KR Reports last 55d| D
+    E[Existing stocks/*.json] -->|Historical Archive| D
+    D -->|Merge & Deduplicate| F[Cleaned Dataset]
+    F -->|Calculate Issuance Bias & 1y Realized Bias| G[Forecasting Bias Engines]
+    G -->|Calculate stats & adjusted targets| H[Output Generators]
+    H -->|Update summary.json| I[(GitHub Pages Directory)]
+    H -->|Update individual stocks/*.json| I
+    I -->|Client-side lazy load| J[app.js / HTML Web App]
+    J -->|Charts Rendering| K[ApexCharts Timelines & Heatmaps]
 ```
-├── index.html           # 대시보드 메인 페이지 (GitHub Pages)
-├── style.css            # 다크모드 글래스모피즘 스타일
-├── app.js               # ApexCharts 기반 차트 렌더링 & 실시간 검색
-├── data.json            # 전수 분석 데이터 (GitHub Pages용)
-├── fetch_data.py        # 40개 종목 멀티스레드 데이터 수집 + 분석 스크립트
-├── requirements.txt     # Python 의존성
-└── README.md
-```
 
-## 📊 데이터 소스
+---
 
-| 소스 | 데이터 | 기간 |
-|------|--------|------|
-| yfinance | US 주가 + 애널리스트 목표가 | 2012~ |
-| 네이버 금융 | KR 애널리스트 목표가 + 투자의견 | 2007~ |
-| 한경 컨센서스 | KR 애널리스트 목표가 (보충) | 2025.06~ |
+## 4. Project Status & Milestones
+- **Data Updated As Of**: **`2026-07-10`** (Up-to-date with the latest market reports).
+- **Consensus Size**: Over **`19,250`** individual analyst reports across 40 US/KR companies.
+- **Completed Milestones**:
+  - English/Korean translations and USD/KRW conversion engine implemented.
+  - Active logarithmic (Log Scale) chart defaults.
+  - Render enhancements: Scatter dot opacity set to 50% for high density visibility, with the price line locked at the absolute front layer.
+  - SEO indexed: Meta verification tags added, with custom `robots.txt` and `sitemap.xml` for Googlebot optimization.
 
-## 📐 Bias 계산 방식
+---
 
-- **Current Bias (현재 괴리율)**: `(목표가 - 현재가) / 현재가 × 100%`
-- **Realized Bias (실현 괴리율)**: `(목표가 - 12개월 후 실제가) / 12개월 후 실제가 × 100%`
+## 5. Execution Cycles & Local Development Guide
 
-### 성향 분류
+### A. Execution Cycle
+- Run `fetch_data.py` periodically to fetch new analyst ratings.
+- Thanks to the optimized incremental fetcher, scanning and generating all JSONs takes only **3 to 4 minutes** rather than hours.
 
-| 카테고리 | 기준 |
-|----------|------|
-| 🔴 과대 긍정적 | Bias > 30% |
-| 🟠 긍정적 | 15% < Bias ≤ 30% |
-| 🟢 적정 | -15% ≤ Bias ≤ 15% |
-| 🔵 보수적 | Bias < -15% |
+### B. Setup & Local Run
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Fetch and generate fresh datasets:
+   ```bash
+   python fetch_data.py
+   ```
+3. Run local testing server:
+   ```bash
+   python -m http.server 8000
+   # Open http://localhost:8000 in your browser
+   ```
 
-## ⚠️ 면책 사항
+---
 
-이 프로젝트의 분석 결과는 참고용이며 투자 권유가 아닙니다.
+## ⚠️ Disclaimer (면책 사항)
+All data and analytics provided in this project are for educational and informational purposes only and do not constitute financial or investment advice.
+
+본 프로젝트의 모든 데이터 분석 결과는 참고용이며, 어떠한 경우에도 투자 권유나 법적 책임의 근거로 사용될 수 없습니다.
