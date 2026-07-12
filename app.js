@@ -1052,7 +1052,7 @@
     const allReports = [];
     for (const [ticker, stock] of Object.entries(STOCK_CACHE)) {
       (stock.analyst_reports || []).forEach(r => {
-        if (r.current_bias_pct != null) {
+        if (r.realized_bias_pct != null) {
           allReports.push({ ...r, ticker, date: r.date });
         }
       });
@@ -1066,7 +1066,7 @@
           if (resp.ok) {
             STOCK_CACHE[t] = await resp.json();
             (STOCK_CACHE[t].analyst_reports || []).forEach(r => {
-              if (r.current_bias_pct != null) {
+              if (r.realized_bias_pct != null) {
                 allReports.push({ ...r, ticker: t, date: r.date });
               }
             });
@@ -1102,7 +1102,7 @@
       const data = sorted.map((r, idx) => {
         const start = Math.max(0, idx - window + 1);
         const slice = sorted.slice(start, idx + 1);
-        const avg = slice.reduce((s, x) => s + Math.abs(x.current_bias_pct), 0) / slice.length;
+        const avg = slice.reduce((s, x) => s + Math.abs(x.realized_bias_pct), 0) / slice.length;
         return { x: new Date(r.date).getTime(), y: parseFloat(avg.toFixed(1)) };
       });
       return { name: getFirmName(firm), data };
