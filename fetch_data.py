@@ -711,10 +711,10 @@ def compute_bias(reports: list[dict], price_history: list[dict], current_price: 
         else:
             r["issuance_bias_pct"] = None
 
-        # Realized bias: target vs actual price 12 months later
+        # Realized bias: target vs actual price 3 months later
         try:
             report_date = datetime.strptime(r["date"], "%Y-%m-%d")
-            future_date = report_date + timedelta(days=365)
+            future_date = report_date + timedelta(days=90)
             if future_date <= datetime.now():
                 actual = get_price_on_date(price_history, future_date.strftime("%Y-%m-%d"))
                 if actual and actual > 0:
