@@ -329,35 +329,132 @@ def get_price_on_date(price_history: list[dict], target_date: str) -> float | No
 # 2. Fetch US analyst targets via yfinance
 # ---------------------------------------------------------------------------
 
+def fetch_finviz_targets(ticker: str) -> list[dict]:
+    """Fetch and parse recent upgrades/downgrades and targets from Finviz as a fallback."""
+    url = f"https://finviz.com/quote.ashx?t={ticker}"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    })
+    
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            html = response.read().decode("utf-8")
+        
+        soup = BeautifulSoup(html, "html.parser")
+        ratings_rows = []
+        for tr in soup.find_all("tr"):
+            text = tr.get_text()
+            if "Upgrade" in text or "Downgrade" in text or "Reiterated" in text or "Initiated" in text:
+                cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+                if len(cells) >= 5:
+                    ratings_rows.append(cells)
+        
+        reports = []
+        for cells in ratings_rows:
+            date_str = cells[0]
+            if not re.match(r'^[A-Za-z]{3}-\d{2}-\d{2}$', date_str):
+                continue
+                
+            try:
+                dt_obj = datetime.strptime(date_str, "%b-%d-%y")
+                formatted_date = dt_obj.strftime("%Y-%m-%d")
+            except Exception:
+                continue
+                
+            action = cells[1]
+            firm = cells[2]
+            grade = cells[3]
+            target_str = cells[4]
+            
+            # Parse target and prior target (e.g. "$825 -> $800" or "$735")
+            prices = re.findall(r'([0-9,]+(?:\.[0-9]+)?)', target_str.replace('$', ''))
+            
+            target_price = None
+            prior_target = None
+            
+            if len(prices) >= 2:
+                try:
+                    prior_target = float(prices[0].replace(',', ''))
+                    target_price = float(prices[1].replace(',', ''))
+                except ValueError:
+                    pass
+            elif len(prices) == 1:
+                try:
+                    target_price = float(prices[0].replace(',', ''))
+                except ValueError:
+                    pass
+                    
+            if target_price is not None:
+                reports.append({
+                    "date": formatted_date,
+                    "firm": firm,
+                    "analyst": "",
+                    "target_price": target_price,
+                    "prior_target": prior_target,
+                    "grade": grade,
+                    "action": action.lower(),
+                    "source": "finviz",
+                })
+        return reports
+    except Exception as e:
+        print(f"    ⚠️ Error fetching Finviz fallback data for {ticker}: {e}")
+        return []
+
+
 def fetch_us_analyst_targets(ticker: str) -> list[dict]:
-    """Return list of analyst report dicts from yfinance upgrades_downgrades."""
+    """Return list of analyst report dicts from yfinance upgrades_downgrades.
+    If the data is stale (e.g. for META), queries Finviz for the latest reports.
+    """
     print(f"  🔍 Fetching US analyst targets for {ticker}...")
     t = yf.Ticker(ticker)
     try:
         ud = t.upgrades_downgrades
     except Exception:
         ud = None
-    if ud is None or ud.empty:
-        print(f"    ⚠️  No analyst data for {ticker}")
-        return []
 
     reports = []
-    for grade_date, row in ud.iterrows():
-        target = safe_float(row.get("currentPriceTarget"))
-        prior = safe_float(row.get("priorPriceTarget"))
-        if target is None or target == 0:
-            continue
-        reports.append({
-            "date": grade_date.strftime("%Y-%m-%d"),
-            "firm": str(row.get("Firm", "")),
-            "analyst": "",
-            "target_price": target,
-            "prior_target": prior,
-            "grade": str(row.get("ToGrade", "")),
-            "action": str(row.get("Action", "")),
-            "source": "yfinance",
-        })
-    print(f"    ✅ {len(reports)} reports found")
+    if ud is not None and not ud.empty:
+        for grade_date, row in ud.iterrows():
+            target = safe_float(row.get("currentPriceTarget"))
+            prior = safe_float(row.get("priorPriceTarget"))
+            if target is None or target == 0:
+                continue
+            reports.append({
+                "date": grade_date.strftime("%Y-%m-%d"),
+                "firm": str(row.get("Firm", "")),
+                "analyst": "",
+                "target_price": target,
+                "prior_target": prior,
+                "grade": str(row.get("ToGrade", "")),
+                "action": str(row.get("Action", "")),
+                "source": "yfinance",
+            })
+    
+    # Check if the yfinance data is missing or stale (older than 14 days)
+    # Today is 2026-07-12
+    needs_finviz_fallback = False
+    if not reports:
+        needs_finviz_fallback = True
+    else:
+        latest_report = max(reports, key=lambda x: x["date"])
+        latest_date = datetime.strptime(latest_report["date"], "%Y-%m-%d")
+        if (datetime.now() - latest_date).days > 14:
+            needs_finviz_fallback = True
+            
+    if needs_finviz_fallback or ticker == "META":
+        print(f"    ℹ️ yfinance data is stale or empty. Querying Finviz for latest META/US reports...")
+        fv_reports = fetch_finviz_targets(ticker)
+        if fv_reports:
+            print(f"      ✅ Found {len(fv_reports)} reports on Finviz. Merging...")
+            seen = {(r["date"], r["firm"]) for r in reports}
+            for fvr in fv_reports:
+                key = (fvr["date"], fvr["firm"])
+                if key not in seen:
+                    reports.append(fvr)
+            # Re-sort reports descending
+            reports.sort(key=lambda x: x["date"], reverse=True)
+
+    print(f"    ✅ {len(reports)} reports found in total")
     return reports
 
 # ---------------------------------------------------------------------------
