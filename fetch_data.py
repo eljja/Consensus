@@ -177,10 +177,15 @@ def fetch_splits(ticker_symbol: str) -> list[tuple[str, float]]:
         return []
 
 
-def adjust_reports_for_splits(reports: list[dict], splits_list: list[tuple[str, float]]):
-    """Adjust target_price and prior_target in reports for subsequent stock splits, supporting raw target caching."""
-    if not splits_list:
+def adjust_reports_for_splits(reports: list[dict], splits_list: list[tuple[str, float]], price_history: list[dict]):
+    """Adjust target_price and prior_target in reports for subsequent stock splits.
+    Detects if the target is already split-adjusted in the source data to avoid double adjustment.
+    """
+    if not splits_list or not price_history:
         return
+    
+    price_map = {p["date"]: p["close"] for p in price_history}
+    
     for r in reports:
         r_date = r.get("date")
         if not r_date:
@@ -189,18 +194,86 @@ def adjust_reports_for_splits(reports: list[dict], splits_list: list[tuple[str, 
         raw_tp = r.get("target_price_raw", r.get("target_price"))
         raw_pt = r.get("prior_target_raw", r.get("prior_target"))
         
+        if raw_tp is None:
+            continue
+            
+        p_close = price_map.get(r_date)
+        if not p_close:
+            p_close = get_price_on_date(price_history, r_date)
+            
+        if not p_close or p_close <= 0:
+            continue
+            
         factor = 1.0
         for s_date, ratio in splits_list:
             if s_date > r_date:
                 factor *= ratio
         
         if factor != 1.0:
-            if raw_tp is not None:
+            # Check if this target price is already split-adjusted in yfinance/source database.
+            # If R = raw_tp / p_close is normal (< 2.0 for forward split), it is already adjusted.
+            # If R is pre-split (> 2.0 for forward split), we must adjust it.
+            ratio = raw_tp / p_close
+            should_adjust = False
+            if factor > 1.0 and ratio > 2.0:
+                should_adjust = True
+            elif factor < 1.0 and ratio < 0.4:
+                should_adjust = True
+                
+            if should_adjust:
                 r["target_price_raw"] = raw_tp
                 r["target_price"] = round(raw_tp / factor, 2)
-            if raw_pt is not None:
-                r["prior_target_raw"] = raw_pt
-                r["prior_target"] = round(raw_pt / factor, 2)
+                if raw_pt is not None:
+                    r["prior_target_raw"] = raw_pt
+                    r["prior_target"] = round(raw_pt / factor, 2)
+            else:
+                # Retain as already split-adjusted
+                r["target_price"] = raw_tp
+                if raw_pt is not None:
+                    r["prior_target"] = raw_pt
+
+
+def filter_outliers(reports: list[dict], price_history: list[dict], ticker: str) -> list[dict]:
+    """Remove obvious database typos/errors based on stock price ratio on report date."""
+    if not price_history:
+        return reports
+        
+    price_map = {p["date"]: p["close"] for p in price_history}
+    cleaned = []
+    
+    for r in reports:
+        r_date = r.get("date")
+        tp = r.get("target_price")
+        if not r_date or tp is None:
+            cleaned.append(r)
+            continue
+            
+        p_close = price_map.get(r_date)
+        if not p_close:
+            p_close = get_price_on_date(price_history, r_date)
+            
+        if not p_close or p_close <= 0:
+            cleaned.append(r)
+            continue
+            
+        ratio = tp / p_close
+        
+        # Outlier conditions:
+        # 1. High-side: target is > 3.5x stock price (always a database typo for our blue chips)
+        # 2. Low-side: target is < 0.15x stock price (except TSLA, which has genuine extreme bears)
+        is_outlier = False
+        if ratio > 3.5:
+            is_outlier = True
+        elif ratio < 0.15 and ticker != "TSLA":
+            is_outlier = True
+            
+        if is_outlier:
+            print(f"  ⚠️  Filtered outlier report for {ticker} on {r_date}: Firm={r.get('firm')}, Target={tp}, StockPrice={p_close} (Ratio={ratio:.2f})")
+            continue
+            
+        cleaned.append(r)
+        
+    return cleaned
 
 
 def naver_request(url: str) -> str:
@@ -669,7 +742,10 @@ def main():
 
         # Adjust for stock splits
         splits = fetch_splits(ticker)
-        adjust_reports_for_splits(reports, splits)
+        adjust_reports_for_splits(reports, splits, price_hist)
+
+        # Filter outliers
+        reports = filter_outliers(reports, price_hist, ticker)
 
         current_price = price_hist[-1]["close"] if price_hist else 0
         compute_bias(reports, price_hist, current_price)
@@ -707,6 +783,7 @@ def main():
     print("\n📊 Fetching Hankyung Consensus data (supplementary)...")
     for code, name in KR_STOCKS.items():
         yf_ticker = f"{code}.KS"
+        price_hist = all_stocks[code]["price_history"]
         print(f"  🔍 Hankyung: {code} ({name})...")
         hk_reports = fetch_hankyung_kr_targets(code)
         print(f"    ✅ {len(hk_reports)} reports")
@@ -732,10 +809,12 @@ def main():
 
         # Adjust for stock splits
         splits = fetch_splits(yf_ticker)
-        adjust_reports_for_splits(final_merged, splits)
+        adjust_reports_for_splits(final_merged, splits, price_hist)
+
+        # Filter outliers
+        final_merged = filter_outliers(final_merged, price_hist, code)
 
         current_price = all_stocks[code]["current_price"]
-        price_hist = all_stocks[code]["price_history"]
         compute_bias(final_merged, price_hist, current_price)
         all_stocks[code]["analyst_reports"] = final_merged
         print(f"    📊 Total merged: {len(final_merged)} reports")
