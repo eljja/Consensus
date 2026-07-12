@@ -88,12 +88,14 @@
       card_target: '평균 목표가',
       card_bias: '평균 괴리율',
       card_reports: '리포트 수',
+      card_prediction: '🎯 3개월 후 예측가',
       vs_current: '현재가 대비 ',
       reports_sub: '최근 3개월 {count}개 증권사 최신',
       realistic_title: '🎯 현실적 투자 목표가 분석 (증권사별 편향 보정 모델)',
       realistic_sub: '증권사별 고유 편향 오차(Bias)를 개별 반영하여 산출한 4대 통계 (최대 / 최소 / 중앙값 / 평균값)',
       raw_badge: '1. 증권사 단순 제시 목표가',
       adj_badge: '2. 🎯 현실적 투자 목표가 (증권사별 편향 보정)',
+      pred_badge: '3. 🎯 3개월 후 예측가 (통계 모델)',
       stat_max: '최대값 (Max)',
       stat_min: '최소값 (Min)',
       stat_med: '중앙값 (Median)',
@@ -102,6 +104,10 @@
       adj_stat_min: '현실적 최소값 (Adj. Min)',
       adj_stat_med: '현실적 중앙값 (Adj. Median)',
       adj_stat_avg: '현실적 평균값 (Adj. Mean) ⭐',
+      pred_stat_max: '예측 최대값 (Pred. Max)',
+      pred_stat_min: '예측 최소값 (Pred. Min)',
+      pred_stat_med: '예측 중앙값 (Pred. Median)',
+      pred_stat_avg: '예측 평균값 (Pred. Mean) ⭐',
       footer_note: '* 최근 3개월 이내 {count}개 증권사별 최신 리포트 1건을 추출한 뒤, 해당 종목에 대한 각 증권사의 역대 3개월 실현 오차율(B_firm)을 개별 보정(T_adj = T_raw ÷ (1 + B_firm/100))하여 현실적 4대 투자 목표가를 산출했습니다.',
       timeline_title: '주가 + 목표가 타임라인',
       scale_linear: '📏 선형 (Linear)',
@@ -150,12 +156,14 @@
       card_target: 'Avg Target Price',
       card_bias: 'Avg Bias %',
       card_reports: 'Active Reports',
+      card_prediction: '🎯 3M Predicted Price',
       vs_current: 'vs Current ',
       reports_sub: 'latest reports from {count} firms (last 3M)',
       realistic_title: '🎯 Realistic Investment Targets (Bias Adjusted)',
       realistic_sub: '4 Core Statistics (Max / Min / Median / Mean) adjusted by individual analyst bias history',
       raw_badge: '1. Raw Brokerage Target Prices',
       adj_badge: '2. 🎯 Realistic Targets (Firm-Bias Adjusted)',
+      pred_badge: '3. 🎯 3-Month Price Prediction (Statistical Model)',
       stat_max: 'Max Target',
       stat_min: 'Min Target',
       stat_med: 'Median Target',
@@ -164,6 +172,10 @@
       adj_stat_min: 'Adj. Min Target',
       adj_stat_med: 'Adj. Median Target',
       adj_stat_avg: 'Adj. Mean Target ⭐',
+      pred_stat_max: 'Pred. Max Price',
+      pred_stat_min: 'Pred. Min Price',
+      pred_stat_med: 'Pred. Median Price',
+      pred_stat_avg: 'Pred. Mean Price ⭐',
       footer_note: '* Calculated by taking the single latest report per firm (within 90d) across {count} firms and adjusting each target price by historical 3-mo bias: T_adj = T_raw / (1 + B_firm/100).',
       timeline_title: 'Price & Target Timeline',
       scale_linear: '📏 Linear Scale',
@@ -503,7 +515,16 @@
       }
     });
 
-    return Object.values(firmLatestMap);
+    const activeList = Object.values(firmLatestMap);
+    
+    // Add weights to active list using exponential time decay (30-day half life)
+    activeList.forEach(r => {
+      const rTime = new Date(r.date).getTime();
+      const ageDays = Math.max(0, (maxTime - rTime) / (24 * 60 * 60 * 1000));
+      r.weight = Math.exp(-Math.log(2) / 30 * ageDays);
+    });
+
+    return activeList;
   }
 
   // ── Update Summary Cards ──
@@ -515,11 +536,17 @@
     const currentPrice = stock.current_price;
     const dict = I18N[currentLang];
 
-    const targets = activeReports.map(r => r.target_price);
-    const avgTarget = targets.length ? targets.reduce((a, b) => a + b, 0) / targets.length : null;
+    // Compute weighted target
+    const sumW = activeReports.reduce((s, r) => s + r.weight, 0);
+    const avgTarget = sumW > 0 ? activeReports.reduce((s, r) => s + r.target_price * r.weight, 0) / sumW : null;
 
-    const biases = activeReports.map(r => getReportIssuanceBias(stock, r)).filter(b => b != null);
-    const avgBias = biases.length ? biases.reduce((a, b) => a + b, 0) / biases.length : null;
+    // Compute weighted bias
+    const biasesWithW = activeReports.map(r => {
+      const b = getReportIssuanceBias(stock, r);
+      return b != null ? { bias: b, weight: r.weight } : null;
+    }).filter(x => x != null);
+    const sumW_bias = biasesWithW.reduce((s, x) => s + x.weight, 0);
+    const avgBias = sumW_bias > 0 ? biasesWithW.reduce((s, x) => s + x.bias * x.weight, 0) / sumW_bias : null;
 
     // Price
     animateValue(document.getElementById('val-price'), currentPrice, market, true);
@@ -552,7 +579,7 @@
     if (repValEl) repValEl.textContent = activeReports.length;
     document.getElementById('sub-reports').textContent = dict.reports_sub.replace('{count}', activeReports.length);
 
-    // Realistic Target Stats
+    // Realistic Target Stats (updates both columns and the prediction card)
     updateRealisticTargetStats(stock);
   }
 
@@ -576,17 +603,17 @@
       const dt = new Date(r.date);
       if (isNaN(dt.getTime())) return;
 
-      const dt1y = new Date(dt);
-      dt1y.setFullYear(dt1y.getFullYear() + 1);
-      const dt1yStr = dt1y.toISOString().split('T')[0];
+      const dt3m = new Date(dt);
+      dt3m.setDate(dt3m.getDate() + 90); // 3-month realization
+      const dt3mStr = dt3m.toISOString().split('T')[0];
 
-      if (dt1yStr <= maxHistDate) {
-        const p1y = getPriceOnDate(priceHist, dt1yStr);
-        if (p1y && p1y > 0) {
-          const bias1y = ((r.target_price - p1y) / p1y) * 100;
-          if (bias1y >= -70 && bias1y <= 200) {
+      if (dt3mStr <= maxHistDate) {
+        const p3m = getPriceOnDate(priceHist, dt3mStr);
+        if (p3m && p3m > 0) {
+          const bias3m = ((r.target_price - p3m) / p3m) * 100;
+          if (bias3m >= -70 && bias3m <= 200) {
             if (!firmBiasListMap[r.firm]) firmBiasListMap[r.firm] = [];
-            firmBiasListMap[r.firm].push(bias1y);
+            firmBiasListMap[r.firm].push(bias3m);
           }
         }
       }
@@ -594,8 +621,12 @@
 
     const firmAvgBiasMap = {};
     for (const [firm, list] of Object.entries(firmBiasListMap)) {
-      const avg = list.reduce((a, b) => a + b, 0) / list.length;
-      firmAvgBiasMap[firm] = Math.max(-30, Math.min(50, avg));
+      const N = list.length;
+      const stockSpecificBias = list.reduce((a, b) => a + b, 0) / N;
+      const globalBias = (DATA.firm_stats && DATA.firm_stats[firm]) ? DATA.firm_stats[firm].avg_realized_bias_pct : 15.0;
+      // Bayesian Shrinkage towards global bias with weight N/(N+5)
+      const shrunkBias = (N / (N + 5)) * stockSpecificBias + (5 / (N + 5)) * globalBias;
+      firmAvgBiasMap[firm] = Math.max(-50, Math.min(200, shrunkBias));
     }
 
     const calcStats = (vals) => {
@@ -608,14 +639,49 @@
       return { min, max, median, mean };
     };
 
+    const calcWeightedStats = (reports, getValueFunc) => {
+      const sorted = reports.map(r => ({ val: getValueFunc(r), weight: r.weight }))
+        .filter(x => x.val != null && !isNaN(x.val))
+        .sort((a, b) => a.val - b.val);
+        
+      if (!sorted.length) return { min: 0, max: 0, median: 0, mean: 0 };
+      
+      const min = sorted[0].val;
+      const max = sorted[sorted.length - 1].val;
+      
+      const sumW = sorted.reduce((s, x) => s + x.weight, 0);
+      const mean = sumW > 0 ? sorted.reduce((s, x) => s + x.val * x.weight, 0) / sumW : sorted.reduce((s, x) => s + x.val, 0) / sorted.length;
+      
+      let median = sorted[Math.floor(sorted.length / 2)].val;
+      if (sumW > 0) {
+        let cumulativeW = 0;
+        const targetW = sumW / 2;
+        for (let i = 0; i < sorted.length; i++) {
+          cumulativeW += sorted[i].weight;
+          if (cumulativeW >= targetW) {
+            median = sorted[i].val;
+            break;
+          }
+        }
+      }
+      return { min, max, median, mean };
+    };
+
     const rawVals = activeReports.map(r => r.target_price);
     const rawStats = calcStats(rawVals);
 
-    const adjVals = activeReports.map(r => {
+    const adjStats = calcWeightedStats(activeReports, r => {
       const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0;
       return r.target_price / (1 + (b / 100));
     });
-    const adjStats = calcStats(adjVals);
+
+    // 3-Month Price Prediction (using Optimal Alpha = 0.05)
+    const predStats = {
+      min: currentPrice + 0.05 * (adjStats.min - currentPrice),
+      max: currentPrice + 0.05 * (adjStats.max - currentPrice),
+      median: currentPrice + 0.05 * (adjStats.median - currentPrice),
+      mean: currentPrice + 0.05 * (adjStats.mean - currentPrice)
+    };
 
     const renderStatBox = (valId, subId, val) => {
       const valEl = document.getElementById(valId);
@@ -638,6 +704,23 @@
     renderStatBox('adj-stat-min', 'adj-sub-min', adjStats.min);
     renderStatBox('adj-stat-med', 'adj-sub-med', adjStats.median);
     renderStatBox('adj-stat-avg', 'adj-sub-avg', adjStats.mean);
+
+    // Render Predicted Stats (3M)
+    renderStatBox('pred-stat-max', 'pred-sub-max', predStats.max);
+    renderStatBox('pred-stat-min', 'pred-sub-min', predStats.min);
+    renderStatBox('pred-stat-med', 'pred-sub-med', predStats.median);
+    renderStatBox('pred-stat-avg', 'pred-sub-avg', predStats.mean);
+
+    // Render 3-Month Prediction Card
+    const valPredCard = document.getElementById('val-prediction');
+    const subPredCard = document.getElementById('sub-prediction');
+    if (valPredCard && subPredCard) {
+      animateValue(valPredCard, Math.round(predStats.mean), market, true);
+      const upside = ((predStats.mean - currentPrice) / currentPrice) * 100;
+      const sign = upside >= 0 ? '+' : '';
+      subPredCard.textContent = `${dict.vs_current}${sign}${upside.toFixed(1)}%`;
+      subPredCard.style.color = upside >= 0 ? '#4ade80' : '#ef4444';
+    }
 
     const noteEl = document.getElementById('realistic-footer-note');
     if (noteEl) {

@@ -116,6 +116,14 @@
           <p class="card-value" id="val-bias">—</p>
           <p class="card-sub" id="sub-bias"></p>
         </div>
+        <div class="summary-card" id="card-prediction">
+          <div class="card-icon icon-pred">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <p class="card-label" data-i18n="card_prediction">🎯 3개월 후 예측가</p>
+          <p class="card-value val-hero" id="val-prediction">—</p>
+          <p class="card-sub" id="sub-prediction"></p>
+        </div>
         <div class="summary-card" id="card-reports">
           <div class="card-icon icon-reports">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -193,6 +201,35 @@
                 <span class="stat-box-label" data-i18n="adj_stat_avg">현실적 평균값 (Adj. Mean) ⭐</span>
                 <span class="stat-box-val val-hero" id="adj-stat-avg">—</span>
                 <span class="stat-box-sub" id="adj-sub-avg"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: 3-Month Price Prediction Stats -->
+          <div class="stats-group pred-stats-group">
+            <div class="stats-group-title">
+              <span class="badge badge-pred" data-i18n="pred_badge">3. 🎯 3개월 후 예측가 (통계 모델)</span>
+            </div>
+            <div class="stats-card-grid">
+              <div class="stat-box pred-highlight-box">
+                <span class="stat-box-label" data-i18n="pred_stat_max">예측 최대값 (Pred. Max)</span>
+                <span class="stat-box-val val-green" id="pred-stat-max">—</span>
+                <span class="stat-box-sub" id="pred-sub-max"></span>
+              </div>
+              <div class="stat-box pred-highlight-box">
+                <span class="stat-box-label" data-i18n="pred_stat_min">예측 최소값 (Pred. Min)</span>
+                <span class="stat-box-val val-blue" id="pred-stat-min">—</span>
+                <span class="stat-box-sub" id="pred-sub-min"></span>
+              </div>
+              <div class="stat-box pred-highlight-box accent-border">
+                <span class="stat-box-label" data-i18n="pred_stat_med">예측 중앙값 (Pred. Median)</span>
+                <span class="stat-box-val val-yellow" id="pred-stat-med">—</span>
+                <span class="stat-box-sub" id="pred-sub-med"></span>
+              </div>
+              <div class="stat-box pred-highlight-box main-target-border">
+                <span class="stat-box-label" data-i18n="pred_stat_avg">예측 평균값 (Pred. Mean) ⭐</span>
+                <span class="stat-box-val val-hero" id="pred-stat-avg">—</span>
+                <span class="stat-box-sub" id="pred-sub-avg"></span>
               </div>
             </div>
           </div>
