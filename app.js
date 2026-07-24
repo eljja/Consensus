@@ -880,6 +880,86 @@
       }
     }
 
+    // Annotations: Add 3-Month Price Prediction annotation line for linear/log price charts
+    let annotationsOpts = {};
+    if (!isPct && stock && stock.current_price) {
+      const activeReports = getActiveRecentReports(stock);
+      if (activeReports.length) {
+        const allReports = (stock.analyst_reports || []).filter(r => r.target_price != null && r.target_price > 0);
+        const priceHist = stock.price_history || [];
+        const maxHistDate = priceHist.length ? priceHist[priceHist.length - 1].date : '';
+        const firmBiasListMap = {};
+
+        allReports.forEach(r => {
+          if (!r.date || !r.firm) return;
+          const dt = new Date(r.date);
+          if (isNaN(dt.getTime())) return;
+
+          const dt3m = new Date(dt);
+          dt3m.setDate(dt3m.getDate() + 90);
+          const dt3mStr = dt3m.toISOString().split('T')[0];
+
+          if (dt3mStr <= maxHistDate) {
+            const p3m = getPriceOnDate(priceHist, dt3mStr);
+            if (p3m && p3m > 0) {
+              const bias3m = ((r.target_price - p3m) / p3m) * 100;
+              if (bias3m >= -70 && bias3m <= 200) {
+                if (!firmBiasListMap[r.firm]) firmBiasListMap[r.firm] = [];
+                firmBiasListMap[r.firm].push(bias3m);
+              }
+            }
+          }
+        });
+
+        const firmAvgBiasMap = {};
+        for (const [firm, list] of Object.entries(firmBiasListMap)) {
+          const N = list.length;
+          const stockSpecificBias = list.reduce((a, b) => a + b, 0) / N;
+          const globalBias = (DATA.firm_stats && DATA.firm_stats[firm]) ? DATA.firm_stats[firm].avg_realized_bias_pct : 15.0;
+          const shrunkBias = (N / (N + 5)) * stockSpecificBias + (5 / (N + 5)) * globalBias;
+          firmAvgBiasMap[firm] = Math.max(-50, Math.min(200, shrunkBias));
+        }
+
+        const calcWeightedMean = (reports, getValueFunc) => {
+          const sorted = reports.map(r => ({ val: getValueFunc(r), weight: r.weight }))
+            .filter(x => x.val != null && !isNaN(x.val));
+          if (!sorted.length) return null;
+          const sumW = sorted.reduce((s, x) => s + x.weight, 0);
+          return sumW > 0 ? sorted.reduce((s, x) => s + x.val * x.weight, 0) / sumW : null;
+        };
+
+        const adjMean = calcWeightedMean(activeReports, r => {
+          const b = firmAvgBiasMap[r.firm] !== undefined ? firmAvgBiasMap[r.firm] : 15.0;
+          return r.target_price / (1 + (b / 100));
+        });
+
+        if (adjMean != null) {
+          const predMeanPrice = stock.current_price + 0.05 * (adjMean - stock.current_price);
+          annotationsOpts = {
+            yaxis: [
+              {
+                y: predMeanPrice,
+                borderColor: '#10b981',
+                strokeDashArray: 5,
+                borderWidth: 2,
+                label: {
+                  borderColor: '#10b981',
+                  style: {
+                    color: '#ffffff',
+                    background: '#10b981',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: { left: 8, right: 8, top: 4, bottom: 4 }
+                  },
+                  text: `${dict.card_prediction}: ${formatPrice(predMeanPrice, stock.market)}`
+                }
+              }
+            ]
+          };
+        }
+      }
+    }
+
     const firmCount = scatterSeries.length;
     const chartColors = [...scatterColors, '#6366f1'];
     const strokeWidths = [...Array(firmCount).fill(0), 3.5];
@@ -888,6 +968,7 @@
 
     const opts = {
       series,
+      annotations: annotationsOpts,
       chart: {
         type: 'line', height: 480, background: 'transparent',
         fontFamily: 'Inter, sans-serif',

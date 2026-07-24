@@ -442,7 +442,7 @@ def fetch_us_analyst_targets(ticker: str) -> list[dict]:
             needs_finviz_fallback = True
             
     if needs_finviz_fallback or ticker == "META":
-        print(f"    ℹ️ yfinance data is stale or empty. Querying Finviz for latest META/US reports...")
+        print(f"    ℹ️ yfinance data is stale or empty. Querying Finviz for latest {ticker}/US reports...")
         fv_reports = fetch_finviz_targets(ticker)
         if fv_reports:
             print(f"      ✅ Found {len(fv_reports)} reports on Finviz. Merging...")
@@ -630,8 +630,13 @@ def fetch_hankyung_kr_targets(stock_code: str) -> list[dict]:
         req = urllib.request.Request(url, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status != 200:
+                    print(f"    ⚠️ Hankyung API HTTP {resp.status} for {stock_code}. Falling back to Naver data.")
+                    break
                 data = json.loads(resp.read().decode("utf-8"))
-        except Exception:
+        except Exception as e:
+            if page == 1:
+                print(f"    ⚠️ Hankyung API fetch notice for {stock_code}: {e}")
             break
 
         raw = data.get("data", [])
@@ -967,35 +972,83 @@ def main():
                 if not firm or not r.get("date"): continue
                 try:
                     dt = datetime.strptime(r["date"], "%Y-%m-%d")
-                    dt1y = dt.replace(year=dt.year + 1).strftime("%Y-%m-%d")
-                    if dt1y <= max_hist_date:
-                        p1y = get_price(dt1y)
-                        if p1y and p1y > 0:
-                            b = (r["target_price"] - p1y) / p1y * 100.0
+                    dt3m = (dt + timedelta(days=90)).strftime("%Y-%m-%d")
+                    if dt3m <= max_hist_date:
+                        p3m = get_price(dt3m)
+                        if p3m and p3m > 0:
+                            b = (r["target_price"] - p3m) / p3m * 100.0
                             if -70.0 <= b <= 200.0:
                                 if firm not in firm_biases: firm_biases[firm] = []
                                 firm_biases[firm].append(b)
                 except: pass
 
-            firm_avg_bias = {f: max(-30.0, min(50.0, sum(l)/len(l))) for f, l in firm_biases.items()}
+            # Bayesian Shrinkage for firm stock-specific bias towards global realized bias
+            firm_avg_bias = {}
+            for f, l in firm_biases.items():
+                N = len(l)
+                stock_bias = sum(l) / float(N)
+                global_bias = firm_stats.get(f, {}).get("avg_realized_bias_pct")
+                if global_bias is None:
+                    global_bias = 15.0
+                shrunk_bias = (N / (N + 5.0)) * stock_bias + (5.0 / (N + 5.0)) * global_bias
+                firm_avg_bias[f] = max(-50.0, min(200.0, shrunk_bias))
+
             max_date = max(r["date"] for r in valid)
-            recent = [r for r in valid if (datetime.strptime(max_date, "%Y-%m-%d") - datetime.strptime(r["date"], "%Y-%m-%d")).days <= 90]
+            max_dt_obj = datetime.strptime(max_date, "%Y-%m-%d")
+            recent = [r for r in valid if (max_dt_obj - datetime.strptime(r["date"], "%Y-%m-%d")).days <= 90]
+            if len(recent) < 3:
+                recent = [r for r in valid if (max_dt_obj - datetime.strptime(r["date"], "%Y-%m-%d")).days <= 180]
+
             firm_map = {}
             for r in sorted(recent, key=lambda x: x["date"]):
                 firm_map[r["firm"]] = r
             active = list(firm_map.values())
 
-            def calc_stats(vals):
+            # Add exponential time-decay weights (30-day half life)
+            active_weighted = []
+            for r in active:
+                r_dt = datetime.strptime(r["date"], "%Y-%m-%d")
+                age_days = max(0, (max_dt_obj - r_dt).days)
+                w = math.exp(-math.log(2) / 30.0 * age_days)
+                active_weighted.append({"report": r, "weight": w})
+
+            def calc_unweighted_stats(vals):
                 sorted_v = sorted(vals)
                 mid = len(sorted_v) // 2
                 med = sorted_v[mid] if len(sorted_v) % 2 != 0 else (sorted_v[mid-1] + sorted_v[mid]) / 2.0
                 return {"min": sorted_v[0], "max": sorted_v[-1], "median": med, "mean": sum(sorted_v)/len(sorted_v)}
 
-            raw_vals = [r["target_price"] for r in active]
-            raw_stats = calc_stats(raw_vals) if raw_vals else {"min": 0, "max": 0, "median": 0, "mean": 0}
+            def calc_weighted_stats(items, val_fn):
+                sorted_items = sorted([(val_fn(x["report"]), x["weight"]) for x in items if val_fn(x["report"]) is not None], key=lambda x: x[0])
+                if not sorted_items:
+                    return {"min": 0, "max": 0, "median": 0, "mean": 0}
+                min_v = sorted_items[0][0]
+                max_v = sorted_items[-1][0]
+                sum_w = sum(w for _, w in sorted_items)
+                mean_v = sum(v * w for v, w in sorted_items) / sum_w if sum_w > 0 else sum(v for v, _ in sorted_items) / len(sorted_items)
+                
+                cum_w = 0.0
+                half_w = sum_w / 2.0
+                med_v = sorted_items[len(sorted_items) // 2][0]
+                for v, w in sorted_items:
+                    cum_w += w
+                    if cum_w >= half_w:
+                        med_v = v
+                        break
+                return {"min": min_v, "max": max_v, "median": med_v, "mean": mean_v}
 
-            adj_vals = [r["target_price"] / (1.0 + firm_avg_bias.get(r["firm"], 15.0) / 100.0) for r in active]
-            adj_stats = calc_stats(adj_vals) if adj_vals else {"min": 0, "max": 0, "median": 0, "mean": 0}
+            raw_vals = [r["target_price"] for r in active]
+            raw_stats = calc_unweighted_stats(raw_vals) if raw_vals else {"min": 0, "max": 0, "median": 0, "mean": 0}
+
+            adj_stats = calc_weighted_stats(active_weighted, lambda r: r["target_price"] / (1.0 + firm_avg_bias.get(r["firm"], 15.0) / 100.0))
+
+            # 3-Month Price Prediction (Alpha = 0.05)
+            pred_stats = {
+                "min": cur_p + 0.05 * (adj_stats["min"] - cur_p),
+                "max": cur_p + 0.05 * (adj_stats["max"] - cur_p),
+                "median": cur_p + 0.05 * (adj_stats["median"] - cur_p),
+                "mean": cur_p + 0.05 * (adj_stats["mean"] - cur_p),
+            }
 
             upside_median = ((adj_stats["median"] - cur_p) / cur_p) * 100.0 if adj_stats["median"] else 0.0
             act_cnt = len(active)
@@ -1003,6 +1056,7 @@ def main():
         else:
             raw_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
             adj_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
+            pred_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
             upside_median = 0.0
             act_cnt = 0
             act_firms = 0
@@ -1017,6 +1071,8 @@ def main():
             "active_firms_count": act_firms,
             "raw_stats": raw_stats,
             "adj_stats": adj_stats,
+            "pred_stats": pred_stats,
+            "predicted_price_3m": pred_stats["mean"],
             "realistic_median_upside": upside_median
         }
 
