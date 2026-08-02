@@ -467,7 +467,7 @@
 
     if (!STOCK_CACHE[ticker]) {
       try {
-        const resp = await fetch(`stocks/${ticker}.json`);
+        const resp = await fetch(`stocks/${ticker}.json?t=${Date.now()}`);
         if (!resp.ok) {
           if (DATA.stocks[ticker] && DATA.stocks[ticker].analyst_reports) {
             STOCK_CACHE[ticker] = DATA.stocks[ticker];
@@ -1145,7 +1145,7 @@
       const majorTickers = ['005930', '000660', '005380', 'AAPL', 'NVDA', 'MSFT'].filter(t => DATA.stocks[t] && !STOCK_CACHE[t]);
       await Promise.all(majorTickers.map(async t => {
         try {
-          const resp = await fetch(`stocks/${t}.json`);
+          const resp = await fetch(`stocks/${t}.json?t=${Date.now()}`);
           if (resp.ok) {
             STOCK_CACHE[t] = await resp.json();
             (STOCK_CACHE[t].analyst_reports || []).forEach(r => {
@@ -1440,9 +1440,9 @@
   // ── Initialization ──
   async function init() {
     try {
-      let resp = await fetch('summary.json');
+      let resp = await fetch(`summary.json?t=${Date.now()}`);
       if (!resp.ok) {
-        resp = await fetch('data.json');
+        resp = await fetch(`data.json?t=${Date.now()}`);
         if (!resp.ok) throw new Error('Cannot load data file.');
       }
       DATA = await resp.json();
