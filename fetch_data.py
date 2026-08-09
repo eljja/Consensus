@@ -1098,6 +1098,18 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=None, allow_nan=False)
 
+    # Update sitemap.xml lastmod date
+    sitemap_path = OUTPUT_DIR / "sitemap.xml"
+    if sitemap_path.exists():
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        try:
+            content = sitemap_path.read_text(encoding="utf-8")
+            import re
+            updated_content = re.sub(r'<lastmod>.*?</lastmod>', f'<lastmod>{today_date}</lastmod>', content)
+            sitemap_path.write_text(updated_content, encoding="utf-8")
+        except Exception as e:
+            print(f"  ⚠️ Failed to update sitemap.xml: {e}")
+
     # Print summary
     total_reports = sum(len(s["analyst_reports"]) for s in all_stocks.values())
     total_firms = len(firm_stats)
