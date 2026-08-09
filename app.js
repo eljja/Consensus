@@ -1359,6 +1359,35 @@
   }
 
   // ── Language & Currency Controls Handler ──
+  function renderGeneratedAtInfo() {
+    if (!DATA || !DATA.generated_at) return;
+    const d = new Date(DATA.generated_at);
+    const dict = I18N[currentLang];
+    const formattedDate = currentLang === 'en'
+      ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+      : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    const genEl = document.getElementById('generated-at');
+    if (genEl) genEl.textContent = `${dict.date_prefix}${formattedDate}`;
+
+    const badgeEl = document.getElementById('update-status-badge');
+    if (badgeEl) {
+      const now = new Date();
+      const diffMs = Math.max(0, now - d);
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 7) {
+        badgeEl.className = 'update-status-badge status-fresh';
+        badgeEl.textContent = currentLang === 'ko' ? '✅ 최신 상태' : '✅ Up to Date';
+        badgeEl.title = currentLang === 'ko' ? `생성 후 ${diffDays}일 경과 (주단위 관리)` : `${diffDays}d since update (Weekly cycle)`;
+      } else {
+        badgeEl.className = 'update-status-badge status-stale';
+        badgeEl.textContent = currentLang === 'ko' ? `⚠️ 업데이트 필요 (${diffDays}일 경과)` : `⚠️ Update Needed (${diffDays}d ago)`;
+        badgeEl.title = currentLang === 'ko' ? '생성 후 7일이 지나 갱신이 필요합니다.' : 'More than 7 days have passed since last update.';
+      }
+    }
+  }
+
   function applyLanguageDOM() {
     const dict = I18N[currentLang];
     document.documentElement.lang = currentLang;
@@ -1380,6 +1409,8 @@
     document.querySelectorAll('#curr-switcher .ctrl-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.curr === currentCurrency);
     });
+
+    renderGeneratedAtInfo();
   }
 
   function initControls() {
@@ -1456,14 +1487,7 @@
       return;
     }
 
-    if (DATA.generated_at) {
-      const d = new Date(DATA.generated_at);
-      const dict = I18N[currentLang];
-      const formattedDate = currentLang === 'en'
-        ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-        : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-      document.getElementById('generated-at').textContent = `${dict.date_prefix}${formattedDate}`;
-    }
+    renderGeneratedAtInfo();
 
     try {
       applyLanguageDOM();

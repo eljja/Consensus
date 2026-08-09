@@ -1,9 +1,9 @@
-name: Daily Consensus Data Update
+name: Weekly Consensus Data Update
 
 on:
   schedule:
-    # Run at 16:00 UTC (01:00 KST / 12:00 EDT) Monday through Friday after US & KR market close
-    - cron: '0 16 * * 1-5'
+    # Run weekly at 16:00 UTC on Friday (01:00 KST Saturday) after US & KR market close for the week
+    - cron: '0 16 * * 5'
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 jobs:
