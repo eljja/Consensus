@@ -209,3 +209,8 @@ graph TD
 All data and analytics provided in this project are for educational and informational purposes only and do not constitute financial or investment advice.
 
 본 프로젝트의 모든 데이터 분석 결과는 참고용이며, 어떠한 경우에도 투자 권유나 법적 책임의 근거로 사용될 수 없습니다.
+
+---
+
+## 📜 License
+This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
