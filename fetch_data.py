@@ -84,6 +84,7 @@ KR_STOCKS = {
     "032830": "삼성생명",
     "015760": "한국전력",
     "034020": "두산에너빌리티",
+    "009150": "삼성전기",
 }
 
 # How many years of Naver Finance research pages to scan (55 days for incremental update)
