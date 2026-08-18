@@ -59,6 +59,7 @@ US_STOCKS = {
     "COST":  "Costco",
     "PEP":   "PepsiCo",
     "KO":    "Coca-Cola",
+    "SNDK":  "SanDisk",
 }
 
 # Korean stocks (20) — code : name
