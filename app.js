@@ -350,15 +350,16 @@
     requestAnimationFrame(step);
   }
 
-  // ── Stock Order ──
+  // ── Stock Order (Market Cap Sorted) ──
   const US_ORDER = [
-    'NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'LLY', 'JPM',
-    'WMT', 'V', 'MA', 'NFLX', 'AMD', 'ORCL', 'COST', 'PEP', 'KO', 'DIS',
+    'NVDA', 'AAPL', 'GOOGL', 'MSFT', 'AMZN', 'AVGO', 'META', 'TSLA', 'LLY', 'JPM',
+    'WMT', 'AMD', 'V', 'MA', 'COST', 'ORCL', 'KO', 'NFLX', 'SNDK', 'PEP', 'DIS'
   ];
 
   const KR_ORDER = [
-    '005930', '000660', '373220', '207940', '005380', '068270', '005490', '035420', '000270', '035720',
-    '105560', '055550', '000810', '012330', '051910', '006400', '028260', '032830', '015760', '034020',
+    '005930', '000660', '005380', '009150', '373220', '207940', '028260', '105560',
+    '032830', '000270', '055550', '034020', '012330', '068270', '006400', '035420',
+    '000810', '005490', '051910', '015760', '035720'
   ];
 
   function calculateStockRealisticMedian(stockSummary) {
@@ -418,8 +419,16 @@
     const usStocks = stocks.filter(s => s.market === 'US');
     const krStocks = stocks.filter(s => s.market === 'KR');
 
-    usStocks.sort((a, b) => US_ORDER.indexOf(a.ticker) - US_ORDER.indexOf(b.ticker));
-    krStocks.sort((a, b) => KR_ORDER.indexOf(a.ticker) - KR_ORDER.indexOf(b.ticker));
+    usStocks.sort((a, b) => {
+      const idxA = US_ORDER.indexOf(a.ticker);
+      const idxB = US_ORDER.indexOf(b.ticker);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
+    krStocks.sort((a, b) => {
+      const idxA = KR_ORDER.indexOf(a.ticker);
+      const idxB = KR_ORDER.indexOf(b.ticker);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
 
     const createPill = (info, container) => {
       const pill = document.createElement('button');
