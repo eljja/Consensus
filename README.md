@@ -60,9 +60,9 @@ $$\text{보정 목표가 } (T_{adj}) = \frac{\text{발표 목표가 } (T_{raw})}
 
 ### C. 🎯 3개월 후 주가 예측 모델 (3-Month Stock Price Prediction)
 애널리스트의 목표가는 본래 12개월 전망치이나, 14,500건 이상의 과거 리포트 데이터를 백테스트하여 **3개월 뒤의 가격 변화율을 가장 정확하게 추정하는 최적화 모델**을 구현했습니다.
-$$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha \times (T_{\text{adj}} - P_{\text{current}})$$
-- **시간 감쇄 가중치 (Time-Decay Weighted Consensus)**: 최신 리포트에 더 높은 신뢰도를 부여하기 위해 반감기 30일의 기하급수 시간 감쇄 가중치 $w_i = e^{-\lambda \cdot t_i}$를 합산에 적용합니다.
-- **수렴 할인율 ($\alpha = 0.05$)**: 3개월 동안 주가가 12개월 목표치로 수렴하는 속도를 모델링한 최적 파라미터입니다. 백테스트 결과, 본 모델은 **MAPE 13.55%**를 기록하여 단순 주가 예측(랜덤워크 Naive Baseline MAPE 13.57%)을 통계적으로 상회하는 예측 우위를 입증했습니다.
+$$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha_i \times (T_{\text{adj}} - P_{\text{current}})$$
+- **시간 감쇄 가중치 (Time-Decay Weighted Consensus)**: 최신 리포트에 더 높은 신뢰도를 부여하기 위해 현재 시점 기준 반감기 30일의 기하급수 시간 감쇄 가중치 $w_i = e^{-\lambda \cdot t_i}$를 합산에 적용합니다.
+- **동적 변동성 연동 수렴 계수 ($\alpha_i$)**: 기존 고정 계수($\alpha=0.05$)에서 종목의 최근 1년 역사적 연율화 변동성($\sigma_i$)과 시장 평균 변동성($\bar{\sigma}$)에 연동된 동적 $\alpha_i = \text{clip}\left(0.05 \times \frac{\sigma_i}{\bar{\sigma}}, 0.02, 0.10\right)$를 적용합니다. 고변동성 성장주(NVDA, TSLA)는 빠른 수렴 속도를, 저변동성 방어주(KO, PEP)는 완만한 수렴 속도를 반영하여 예측 정밀도를 극대화했습니다.
 
 ---
 
@@ -155,9 +155,9 @@ $$\text{Adjusted Target } (T_{adj}) = \frac{\text{Raw Target } (T_{raw})}{1 + \f
 
 ### C. 🎯 3-Month Stock Price Prediction Model
 While target prices are inherently 12-month forecasts, we implemented an optimized model to forecast price actions over a **3-month horizon** by backtesting 14,500+ historical analyst reports.
-$$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha \times (T_{\text{adj}} - P_{\text{current}})$$
-- **Time-Decay Weighted Consensus**: Applies exponential weight decay with a 30-day half-life ($w_i = e^{-\lambda \cdot t_i}$) to favor recent macro-economic updates.
-- **Horizon Convergence Factor ($\alpha = 0.05$)**: Optimal parameter modeling the rate of price convergence over a 3-month period. In backtests, our model achieved a **MAPE of 13.55%**, statistically beating the Naive random-walk baseline (MAPE of 13.57%).
+$$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha_i \times (T_{\text{adj}} - P_{\text{current}})$$
+- **Time-Decay Weighted Consensus**: Applies exponential weight decay with a 30-day half-life ($w_i = e^{-\lambda \cdot t_i}$) anchored to the current timestamp to favor recent macroeconomic updates.
+- **Dynamic Volatility-Adjusted Convergence Factor ($\alpha_i$)**: Instead of a static constant ($\alpha=0.05$), $\alpha_i$ dynamically scales with 1-year historical annualized volatility ($\sigma_i$) relative to market median ($\bar{\sigma}$): $\alpha_i = \text{clip}\left(0.05 \times \frac{\sigma_i}{\bar{\sigma}}, 0.02, 0.10\right)$, tailoring responsiveness for high-beta growth stocks (e.g. NVDA, TSLA) vs low-beta defensive assets (e.g. KO, PEP).
 
 ---
 

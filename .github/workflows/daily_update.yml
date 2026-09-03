@@ -36,4 +36,4 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff-index --quiet HEAD || (git commit -m "auto: daily consensus data update $(date -u +'%Y-%m-%d %H:%M UTC')" && git push)
+          git diff-index --quiet HEAD || (git commit -m "auto: weekly consensus data update $(date -u +'%Y-%m-%d %H:%M UTC')" && git push)

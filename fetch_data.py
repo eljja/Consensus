@@ -20,6 +20,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from bisect import bisect_right
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -312,20 +313,56 @@ def fetch_price_history(ticker: str, period: str = "10y") -> list[dict]:
     return records
 
 
-def get_price_on_date(price_history: list[dict], target_date: str) -> float | None:
-    """Find the closing price on or just before target_date."""
+_PRICE_LOOKUP_CACHE = {}
+
+def get_price_on_date(price_history: list[dict], target_date: str, max_lookback_days: int = 7) -> float | None:
+    """Find the closing price on or just before target_date using bisect with max lookback cutoff."""
     if not price_history:
         return None
-    target = datetime.strptime(target_date, "%Y-%m-%d")
-    best = None
-    best_diff = timedelta(days=9999)
-    for rec in price_history:
-        d = datetime.strptime(rec["date"], "%Y-%m-%d")
-        diff = target - d
-        if timedelta(0) <= diff < best_diff:
-            best = rec["close"]
-            best_diff = diff
-    return best
+    
+    cache_key = id(price_history)
+    lookup = _PRICE_LOOKUP_CACHE.get(cache_key)
+    if lookup is None:
+        dates = [p["date"] for p in price_history]
+        closes = [p["close"] for p in price_history]
+        lookup = (dates, closes)
+        _PRICE_LOOKUP_CACHE[cache_key] = lookup
+        
+    dates, closes = lookup
+    idx = bisect_right(dates, target_date) - 1
+    if idx < 0:
+        return None
+        
+    matched_date = dates[idx]
+    if matched_date == target_date:
+        return closes[idx]
+        
+    # Check max lookback gap (e.g. 7 days for weekend/holiday gap)
+    try:
+        t_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        m_dt = datetime.strptime(matched_date, "%Y-%m-%d")
+        if (t_dt - m_dt).days > max_lookback_days:
+            return None
+    except Exception:
+        pass
+        
+    return closes[idx]
+
+
+def compute_stock_volatility(price_history: list[dict]) -> float:
+    """Compute annualized volatility of daily log returns over the past 1 year (~252 trading days)."""
+    if not price_history or len(price_history) < 20:
+        return 0.30  # default 30%
+    closes = [p["close"] for p in price_history[-252:] if p.get("close") and p["close"] > 0]
+    if len(closes) < 20:
+        return 0.30
+    log_returns = [math.log(closes[i] / closes[i-1]) for i in range(1, len(closes)) if closes[i-1] > 0]
+    if not log_returns:
+        return 0.30
+    mean_ret = sum(log_returns) / len(log_returns)
+    var = sum((r - mean_ret) ** 2 for r in log_returns) / (len(log_returns) - 1)
+    ann_vol = math.sqrt(var) * math.sqrt(252)
+    return round(float(ann_vol), 4)
 
 # ---------------------------------------------------------------------------
 # 2. Fetch US analyst targets via yfinance
@@ -936,6 +973,15 @@ def main():
 
     gen_at = datetime.now().isoformat(timespec="seconds")
 
+    # Pre-compute historical volatilities for all stocks
+    stock_volatilities = {}
+    for ticker, stock in all_stocks.items():
+        stock_volatilities[ticker] = compute_stock_volatility(stock.get("price_history", []))
+    
+    valid_vols = [v for v in stock_volatilities.values() if v > 0.05]
+    avg_market_vol = sum(valid_vols) / len(valid_vols) if valid_vols else 0.28
+    print(f"  📈 Market average volatility across stocks: {avg_market_vol * 100:.1f}%")
+
     # Helper for stock summary
     summary_stocks = {}
 
@@ -1006,11 +1052,12 @@ def main():
                 firm_map[r["firm"]] = r
             active = list(firm_map.values())
 
-            # Add exponential time-decay weights (30-day half life)
+            # Add exponential time-decay weights (30-day half life, anchored to today)
+            today_dt = datetime.now()
             active_weighted = []
             for r in active:
                 r_dt = datetime.strptime(r["date"], "%Y-%m-%d")
-                age_days = max(0, (max_dt_obj - r_dt).days)
+                age_days = max(0, (today_dt - r_dt).days)
                 w = math.exp(-math.log(2) / 30.0 * age_days)
                 active_weighted.append({"report": r, "weight": w})
 
@@ -1044,18 +1091,23 @@ def main():
 
             adj_stats = calc_weighted_stats(active_weighted, lambda r: r["target_price"] / (1.0 + firm_avg_bias.get(r["firm"], 15.0) / 100.0))
 
-            # 3-Month Price Prediction (Alpha = 0.05)
+            # 3-Month Price Prediction (Dynamic Volatility-Adjusted Alpha)
+            vol_i = stock_volatilities.get(ticker, avg_market_vol)
+            alpha_i = max(0.02, min(0.10, round(0.05 * (vol_i / avg_market_vol), 3)))
+
             pred_stats = {
-                "min": cur_p + 0.05 * (adj_stats["min"] - cur_p),
-                "max": cur_p + 0.05 * (adj_stats["max"] - cur_p),
-                "median": cur_p + 0.05 * (adj_stats["median"] - cur_p),
-                "mean": cur_p + 0.05 * (adj_stats["mean"] - cur_p),
+                "min": cur_p + alpha_i * (adj_stats["min"] - cur_p),
+                "max": cur_p + alpha_i * (adj_stats["max"] - cur_p),
+                "median": cur_p + alpha_i * (adj_stats["median"] - cur_p),
+                "mean": cur_p + alpha_i * (adj_stats["mean"] - cur_p),
             }
 
             upside_median = ((adj_stats["median"] - cur_p) / cur_p) * 100.0 if adj_stats["median"] else 0.0
             act_cnt = len(active)
             act_firms = len(set(r["firm"] for r in active))
         else:
+            vol_i = stock_volatilities.get(ticker, 0.30)
+            alpha_i = 0.05
             raw_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
             adj_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
             pred_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
@@ -1068,6 +1120,8 @@ def main():
             "market": stock["market"],
             "ticker": ticker,
             "current_price": stock["current_price"],
+            "volatility_annualized": vol_i,
+            "alpha_applied": alpha_i,
             "reports_count": len(stock.get("analyst_reports", [])),
             "active_reports_count": act_cnt,
             "active_firms_count": act_firms,

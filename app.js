@@ -311,11 +311,14 @@
 
   function getReportIssuanceBias(stock, r) {
     if (!r || r.target_price == null || r.target_price <= 0) return null;
-    const pDate = getPriceOnDate(stock.price_history, r.date);
-    if (pDate && pDate > 0) {
-      return ((r.target_price - pDate) / pDate) * 100;
+    if (r.issuance_bias_pct != null) return r.issuance_bias_pct;
+    if (stock && stock.price_history) {
+      const pDate = getPriceOnDate(stock.price_history, r.date);
+      if (pDate && pDate > 0) {
+        return ((r.target_price - pDate) / pDate) * 100;
+      }
     }
-    return r.current_bias_pct;
+    return null;
   }
 
   function biasCategory(bias) {
@@ -335,9 +338,18 @@
     return '#3b82f6';
   }
 
-  function animateValue(el, target, market, isRawValue = true, duration = 600) {
+  function animateValue(el, target, market, isRawValue = true, duration = 400) {
     if (!el || target == null || isNaN(target)) return;
-    const start = 0;
+    
+    // Smooth interpolation: start from previous value if available, else 0 on initial mount
+    const start = (el._lastVal != null && !isNaN(el._lastVal)) ? el._lastVal : 0;
+    el._lastVal = target;
+    
+    if (start === target) {
+      el.textContent = isRawValue ? formatPrice(target, market) : (target > 0 ? '+' : '') + target.toFixed(1) + '%';
+      return;
+    }
+    
     const startTime = performance.now();
     function step(now) {
       const elapsed = now - startTime;
@@ -488,12 +500,21 @@
           STOCK_CACHE[ticker] = await resp.json();
         }
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load stock data for', ticker, err);
+        const chartTimelineEl = document.getElementById('chart-timeline');
+        if (chartTimelineEl) {
+          chartTimelineEl.innerHTML = `
+            <div class="retry-box">
+              <p class="retry-msg">⚠️ ${currentLang === 'ko' ? '종목 상세 데이터를 불러오지 못했습니다.' : 'Failed to load stock detail data.'}</p>
+              <button class="retry-btn" onclick="window.selectStock('${ticker}')">${currentLang === 'ko' ? '🔄 다시 시도' : '🔄 Retry'}</button>
+            </div>`;
+        }
         return;
       }
     }
     updateDashboard();
   }
+  window.selectStock = selectStock;
 
   function getActiveRecentReports(stock) {
     const targetStock = stock || STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
@@ -685,12 +706,16 @@
       return r.target_price / (1 + (b / 100));
     });
 
-    // 3-Month Price Prediction (using Optimal Alpha = 0.05)
+    // 3-Month Price Prediction (using Dynamic Volatility-Adjusted Alpha)
+    const stockSummary = (DATA.stocks && DATA.stocks[selectedTicker]) || {};
+    const alpha = stockSummary.alpha_applied != null ? stockSummary.alpha_applied : 0.05;
+    const vol = stockSummary.volatility_annualized != null ? stockSummary.volatility_annualized : null;
+
     const predStats = {
-      min: currentPrice + 0.05 * (adjStats.min - currentPrice),
-      max: currentPrice + 0.05 * (adjStats.max - currentPrice),
-      median: currentPrice + 0.05 * (adjStats.median - currentPrice),
-      mean: currentPrice + 0.05 * (adjStats.mean - currentPrice)
+      min: currentPrice + alpha * (adjStats.min - currentPrice),
+      max: currentPrice + alpha * (adjStats.max - currentPrice),
+      median: currentPrice + alpha * (adjStats.median - currentPrice),
+      mean: currentPrice + alpha * (adjStats.mean - currentPrice)
     };
 
     const renderStatBox = (valId, subId, val) => {
@@ -728,7 +753,8 @@
       animateValue(valPredCard, Math.round(predStats.mean), market, true);
       const upside = ((predStats.mean - currentPrice) / currentPrice) * 100;
       const sign = upside >= 0 ? '+' : '';
-      subPredCard.textContent = `${dict.vs_current}${sign}${upside.toFixed(1)}%`;
+      const alphaTag = ` (α=${(alpha * 100).toFixed(0)}%)`;
+      subPredCard.textContent = `${dict.vs_current}${sign}${upside.toFixed(1)}%${alphaTag}`;
       subPredCard.style.color = upside >= 0 ? '#4ade80' : '#ef4444';
     }
 
@@ -816,8 +842,39 @@
       };
 
     } else {
+      // Determine active currency for chart display
+      let activeCurr = currentCurrency;
+      if (activeCurr === 'AUTO') {
+        activeCurr = currentLang === 'en' ? 'USD' : (stock.market === 'KR' ? 'KRW' : 'USD');
+      }
+
+      // Conversion rate from stock's native currency to activeCurr
+      let fx = 1.0;
+      if (stock.market === 'US' && activeCurr === 'KRW') {
+        fx = USD_KRW_RATE;
+      } else if (stock.market === 'KR' && activeCurr === 'USD') {
+        fx = 1.0 / USD_KRW_RATE;
+      }
+
+      const formatChartCurrency = (val) => {
+        if (val == null || isNaN(val)) return '—';
+        if (activeCurr === 'USD') {
+          return '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        return (currentLang === 'en' ? '₩' : '') + Math.round(val).toLocaleString('ko-KR') + (currentLang === 'en' ? '' : '원');
+      };
+
+      const formatChartAxis = (val) => {
+        if (val == null || isNaN(val) || val <= 0) return '';
+        if (activeCurr === 'USD') {
+          return '$' + (val >= 100 ? Math.round(val).toLocaleString('en-US') : val.toFixed(1));
+        }
+        return Math.round(val).toLocaleString('ko-KR') + (currentLang === 'en' ? '' : '원');
+      };
+
       const priceData = (stock.price_history || []).map(p => ({
-        x: new Date(p.date).getTime(), y: p.close
+        x: new Date(p.date).getTime(),
+        y: Math.round(p.close * fx * 100) / 100
       }));
 
       const firmMap = {};
@@ -828,11 +885,11 @@
         if (!firmMap[displayName]) firmMap[displayName] = [];
         firmMap[displayName].push({
           x: new Date(r.date).getTime(),
-          y: r.target_price,
+          y: Math.round(r.target_price * fx * 100) / 100,
           firm: displayName,
           analyst: r.analyst,
-          target_price: r.target_price,
-          report_price: reportPrice,
+          target_price: Math.round(r.target_price * fx * 100) / 100,
+          report_price: reportPrice != null ? Math.round(reportPrice * fx * 100) / 100 : null,
           bias: issuanceBias,
           grade: r.grade
         });
@@ -863,13 +920,10 @@
           max: maxVal,
           labels: {
             style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
-            formatter: v => {
-              if (v == null || isNaN(v) || v <= 0) return '';
-              return formatPrice(v, stock.market);
-            }
+            formatter: v => formatChartAxis(v)
           },
           title: {
-            text: dict.chart_price_log_title,
+            text: `${dict.chart_price_log_title} (${activeCurr})`,
             style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
           }
         };
@@ -877,13 +931,10 @@
         yaxisOpts = {
           labels: {
             style: { colors: 'rgba(255,255,255,.4)', fontSize: '11px' },
-            formatter: v => {
-              if (v == null || isNaN(v)) return '';
-              return formatPrice(v, stock.market);
-            }
+            formatter: v => formatChartAxis(v)
           },
           title: {
-            text: dict.chart_price_linear_title,
+            text: `${dict.chart_price_linear_title} (${activeCurr})`,
             style: { color: 'rgba(255,255,255,.4)', fontSize: '11px' }
           }
         };
@@ -937,18 +988,24 @@
           if (!point) return '';
           const dateStr = new Date(point.x).toLocaleDateString(currentLang === 'en' ? 'en-US' : 'ko-KR');
           if (isLineSeries) {
+            let activeCurr = currentCurrency;
+            if (activeCurr === 'AUTO') activeCurr = currentLang === 'en' ? 'USD' : (stock.market === 'KR' ? 'KRW' : 'USD');
+            const priceLabel = isPct ? dict.chart_price_base : (dict.chart_price_legend + ': ' + (activeCurr === 'USD' ? '$' + point.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.round(point.y).toLocaleString('ko-KR') + (currentLang === 'en' ? ' KRW' : '원')));
             return `<div style="padding:10px 14px;font-size:12px;">
               <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${dateStr}</div>
-              <div style="font-weight:700;">${isPct ? dict.chart_price_base : dict.chart_price_legend + ': ' + formatPrice(point.y, stock.market)}</div>
+              <div style="font-weight:700;">${priceLabel}</div>
             </div>`;
           }
-          const datePriceStr = point.report_price ? `<div>${dict.date_price}: <strong>${formatPrice(point.report_price, stock.market)}</strong></div>` : '';
+          let activeCurr = currentCurrency;
+          if (activeCurr === 'AUTO') activeCurr = currentLang === 'en' ? 'USD' : (stock.market === 'KR' ? 'KRW' : 'USD');
+          const fmtPrice = (v) => activeCurr === 'USD' ? '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.round(v).toLocaleString('ko-KR') + (currentLang === 'en' ? ' KRW' : '원');
+          const datePriceStr = point.report_price ? `<div>${dict.date_price}: <strong>${fmtPrice(point.report_price)}</strong></div>` : '';
           return `<div style="padding:10px 14px;font-size:12px;max-width:260px;">
             <div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${dateStr}</div>
             <div style="font-weight:700;margin-bottom:2px;">${point.firm}</div>
             ${point.analyst ? `<div style="color:rgba(255,255,255,.5);margin-bottom:4px;">${point.analyst}</div>` : ''}
             ${datePriceStr}
-            <div>${dict.target_price}: <strong>${formatPrice(point.target_price || point.y, stock.market)}</strong></div>
+            <div>${dict.target_price}: <strong>${fmtPrice(point.target_price || point.y)}</strong></div>
             ${point.grade ? `<div>${dict.grade}: ${point.grade}</div>` : ''}
             ${point.bias != null ? `<div>${dict.bias}: <span style="color:${biasColor(point.bias)}">${formatPercent(point.bias)}</span></div>` : ''}
           </div>`;

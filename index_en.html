@@ -169,7 +169,7 @@
           <div class="card-icon icon-pred">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
           </div>
-          <p class="card-label" data-i18n="card_prediction">🎯 3M Predicted Price</p>
+          <p class="card-label"><span data-i18n="card_prediction">🎯 3M Predicted Price</span><span class="info-tooltip" title="3-month forecast reflecting partial convergence (dynamic α linked to 1Y volatility) from current price toward 12-month bias-adjusted target.">ⓘ</span></p>
           <p class="card-value val-hero" id="val-prediction">—</p>
           <p class="card-sub" id="sub-prediction"></p>
          </div>
@@ -228,7 +228,7 @@
           <!-- Column 2: Firm-Adjusted Realistic Target Stats -->
           <div class="stats-group adj-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-adj" data-i18n="adj_badge">2. 🎯 Realistic Targets (Firm-Bias Adjusted)</span>
+              <span class="badge badge-adj"><span data-i18n="adj_badge">2. 🎯 Realistic Targets (Firm-Bias Adjusted)</span><span class="info-tooltip" title="Realistic 12-month target derived by subtracting historical brokerage forecasting bias from raw analyst consensus.">ⓘ</span></span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box highlight-box">
@@ -257,7 +257,7 @@
           <!-- Column 3: 3-Month Price Prediction Stats -->
           <div class="stats-group pred-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-pred" data-i18n="pred_badge">3. 🎯 3-Month Price Prediction (Statistical Model)</span>
+              <span class="badge badge-pred"><span data-i18n="pred_badge">3. 🎯 3-Month Price Prediction (Statistical Model)</span><span class="info-tooltip" title="Simulated 3-month price bounds using dynamic volatility-adjusted convergence rate (α=2~10%).">ⓘ</span></span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box pred-highlight-box">

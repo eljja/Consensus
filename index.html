@@ -169,7 +169,7 @@
           <div class="card-icon icon-pred">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
           </div>
-          <p class="card-label" data-i18n="card_prediction">🎯 3개월 후 예측가</p>
+          <p class="card-label"><span data-i18n="card_prediction">🎯 3개월 후 예측가</span><span class="info-tooltip" title="12개월 편향 보정 목표가와 현재가 간 격차를 최근 1년 변동성에 연동된 동적 수렴율(α)로 산출한 3개월 예상 주가입니다.">ⓘ</span></p>
           <p class="card-value val-hero" id="val-prediction">—</p>
           <p class="card-sub" id="sub-prediction"></p>
         </div>
@@ -228,7 +228,7 @@
           <!-- Column 2: Firm-Adjusted Realistic Target Stats -->
           <div class="stats-group adj-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-adj" data-i18n="adj_badge">2. 🎯 현실적 투자 목표가 (증권사별 편향 보정)</span>
+              <span class="badge badge-adj"><span data-i18n="adj_badge">2. 🎯 현실적 투자 목표가 (증권사별 편향 보정)</span><span class="info-tooltip" title="각 증권사가 과거에 낸 목표가와 90일 후 실제 주가 사이의 실현 오차(Bias)를 개별 측정하여 거품을 뺀 현실적 12개월 목표치입니다.">ⓘ</span></span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box highlight-box">
@@ -257,7 +257,7 @@
           <!-- Column 3: 3-Month Price Prediction Stats -->
           <div class="stats-group pred-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-pred" data-i18n="pred_badge">3. 🎯 3개월 후 예측가 (통계 모델)</span>
+              <span class="badge badge-pred"><span data-i18n="pred_badge">3. 🎯 3개월 후 예측가 (통계 모델)</span><span class="info-tooltip" title="현실적 12개월 목표가로의 가격 수렴 속도를 종목별 역사적 변동성에 연동된 동적 Alpha(2~10%) 모델로 시뮬레이션한 수치입니다.">ⓘ</span></span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box pred-highlight-box">
