@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stock Consensus Prediction & Bias Analytics Dashboard</title>
+  <title>Stock Consensus Prediction &amp; Bias Analytics Dashboard</title>
   <meta name="description" content="Analyst target price consensus, historical forecast bias analysis, and Bayesian-adjusted 3-month price predictions for 42 major US/KR stocks." />
   <meta name="keywords" content="Stock Consensus, Analyst Bias, Target Price Forecast, 3-Month Price Prediction, Bayesian Adjustment, NVIDIA, Apple, SanDisk, Tesla, Samsung Electronics, US Stocks, Korean Stocks" />
   <meta name="author" content="Consensus Analytics" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-  <meta name="theme-color" content="#0a0a1a" />
+  <meta name="theme-color" content="#080b16" />
   <meta name="google-site-verification" content="tQU4ms4HtuSSnlNO14YJO8OMyy59mqlFixqXl3Lhlbw" />
 
   <!-- Canonical & Multilingual Alternate Links -->
@@ -20,8 +20,8 @@
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://eljja.github.io/Consensus/index_en.html" />
-  <meta property="og:site_name" content="Stock Consensus & Bias Analytics" />
-  <meta property="og:title" content="Stock Consensus Prediction & Bias Analytics Dashboard" />
+  <meta property="og:site_name" content="Stock Consensus &amp; Bias Analytics" />
+  <meta property="og:title" content="Stock Consensus Prediction &amp; Bias Analytics Dashboard" />
   <meta property="og:description" content="Track analyst target price forecasting accuracy, bias patterns, and realistic Bayesian-adjusted price targets for 42 major US and South Korean stocks." />
   <meta property="og:image" content="https://eljja.github.io/Consensus/favicon.png" />
   <meta property="og:locale" content="en_US" />
@@ -29,7 +29,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:url" content="https://eljja.github.io/Consensus/index_en.html" />
-  <meta name="twitter:title" content="Stock Consensus Prediction & Bias Analytics Dashboard" />
+  <meta name="twitter:title" content="Stock Consensus Prediction &amp; Bias Analytics Dashboard" />
   <meta name="twitter:description" content="Track analyst target price forecasting accuracy, bias patterns, and realistic Bayesian-adjusted price targets for 42 major US and South Korean stocks." />
   <meta name="twitter:image" content="https://eljja.github.io/Consensus/favicon.png" />
 
@@ -58,249 +58,432 @@
   <link rel="apple-touch-icon" href="favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Ambient background blobs -->
-  <div class="ambient-bg">
+  <!-- Ambient background -->
+  <div class="ambient-bg" aria-hidden="true">
     <div class="blob blob-1"></div>
     <div class="blob blob-2"></div>
     <div class="blob blob-3"></div>
   </div>
 
   <!-- Loading overlay -->
-  <div id="loading-overlay" class="loading-overlay">
+  <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
     <div class="loader-ring">
       <div></div><div></div><div></div><div></div>
     </div>
-    <p class="loader-text">Loading Data...</p>
+    <p class="loader-text" data-i18n="loading_text">Loading consensus analytics...</p>
   </div>
 
   <!-- Top bar -->
-  <header class="top-bar">
+  <header class="top-bar" id="top-bar">
     <div class="top-bar-inner">
       <div class="brand">
-        <div class="brand-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
         </div>
-        <div>
-          <h1 class="brand-title" data-i18n="title">Stock Consensus Prediction & Bias Analytics</h1>
+        <div class="brand-copy">
+          <h1 class="brand-title" data-i18n="title">Stock Consensus &amp; Bias Analytics</h1>
           <p class="brand-sub">
             <span id="generated-at">Data Generated: —</span>
             <span id="update-status-badge" class="update-status-badge"></span>
           </p>
         </div>
       </div>
+
       <div class="top-bar-right">
+        <button type="button" class="quick-search-trigger" id="btn-open-palette" aria-label="Quick stock search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span data-i18n="quick_jump">Quick Jump</span>
+          <kbd class="kbd-hint">/</kbd>
+        </button>
+
+        <button type="button" class="action-pill-btn" id="btn-open-screener">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          <span data-i18n="screener_btn">42-Stock Screener</span>
+        </button>
+
         <div class="header-controls">
-          <div class="control-group" id="lang-switcher">
-            <button class="ctrl-btn" data-lang="ko">🇰🇷 KO</button>
-            <button class="ctrl-btn active" data-lang="en">🇺🇸 EN</button>
+          <div class="control-group" id="lang-switcher" role="group" aria-label="Language">
+            <button type="button" class="ctrl-btn" data-lang="ko">KO</button>
+            <button type="button" class="ctrl-btn active" data-lang="en">EN</button>
           </div>
-          <div class="control-group" id="curr-switcher">
-            <button class="ctrl-btn" data-curr="AUTO" title="Auto Currency">🔀 Auto</button>
-            <button class="ctrl-btn active" data-curr="USD" title="USD ($)">$ USD</button>
-            <button class="ctrl-btn" data-curr="KRW" title="KRW (₩)">₩ KRW</button>
+          <div class="control-group" id="curr-switcher" role="group" aria-label="Currency">
+            <button type="button" class="ctrl-btn" data-curr="AUTO" title="Auto Currency">Auto</button>
+            <button type="button" class="ctrl-btn active" data-curr="USD" title="USD ($)">$ USD</button>
+            <button type="button" class="ctrl-btn" data-curr="KRW" title="KRW (₩)">₩ KRW</button>
           </div>
         </div>
-        <div class="live-indicator">
-          <div class="live-dot"></div>
-          <span class="live-label" data-i18n="live">LIVE</span>
+      </div>
+    </div>
+
+    <!-- Sticky Selected Stock Context Bar -->
+    <div class="sticky-context-bar" id="sticky-stock-bar" aria-hidden="true">
+      <div class="sticky-context-inner">
+        <div class="sticky-stock-id">
+          <span class="mini-market-badge" id="sticky-market">—</span>
+          <strong id="sticky-name">—</strong>
+          <span class="sticky-ticker" id="sticky-ticker"></span>
+        </div>
+        <div class="sticky-metrics">
+          <span class="sticky-metric"><span class="sticky-metric-label" data-i18n="card_price">Current</span> <strong id="sticky-price">—</strong></span>
+          <span class="sticky-sep">·</span>
+          <span class="sticky-metric"><span data-i18n="sticky_adj_label">12M Adj</span> <strong id="sticky-adj">—</strong> <em id="sticky-adj-upside"></em></span>
+          <span class="sticky-sep">·</span>
+          <span class="sticky-metric"><span data-i18n="sticky_pred_label">3M Forecast</span> <strong id="sticky-pred">—</strong></span>
+        </div>
+        <div class="sticky-actions">
+          <button type="button" class="sticky-switch-btn" id="sticky-switch-btn" data-i18n="switch_stock_btn">Switch Stock</button>
         </div>
       </div>
     </div>
   </header>
 
   <main class="main-content">
-    <!-- Stock Selector -->
-    <section class="section stock-selector-section fade-in">
-      <div class="section-header">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span data-i18n="select_stock_title">Select Stock (42 Major US/KR Stocks)</span>
-        </h2>
-        <div class="table-controls">
-          <input type="text" id="stock-search" class="table-search" placeholder="Search stock (e.g. Samsung, Apple, NVDA...)" data-i18n-ph="search_placeholder" />
+    <!-- Section 1: Stock Discovery Hub -->
+    <section class="section discovery-section fade-in" id="sec-discovery">
+      <div class="glass-panel discovery-panel">
+        <div class="discovery-toolbar">
+          <div class="discovery-left">
+            <div class="segmented-tabs" id="market-tabs" role="tablist" aria-label="Market Filter">
+              <button type="button" class="seg-tab active" data-market="ALL" role="tab" aria-selected="true" data-i18n="tab_all">All 42</button>
+              <button type="button" class="seg-tab" data-market="US" role="tab" aria-selected="false" data-i18n="tab_us">🇺🇸 US 21</button>
+              <button type="button" class="seg-tab" data-market="KR" role="tab" aria-selected="false" data-i18n="tab_kr">🇰🇷 KR 21</button>
+            </div>
+
+            <div class="sort-control">
+              <label for="stock-sort" class="sr-only" data-i18n="sort_label">Sort</label>
+              <select id="stock-sort" class="select-pill" aria-label="Stock sort order">
+                <option value="mcap" data-i18n="sort_mcap">Market Cap (Default)</option>
+                <option value="upside_desc" data-i18n="sort_upside_desc">Highest Upside ↑</option>
+                <option value="upside_asc" data-i18n="sort_upside_asc">Most Downside ↓</option>
+                <option value="vol_desc" data-i18n="sort_vol_desc">Highest Volatility</option>
+                <option value="reports_desc" data-i18n="sort_reports_desc">Most Active Firms</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="discovery-right">
+            <div class="search-input-wrap">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="stock-search" class="table-search compact-search" placeholder="Filter stocks (e.g. Samsung, NVDA)..." data-i18n-ph="search_placeholder" autocomplete="off" />
+              <button type="button" class="search-clear-btn hidden" id="stock-search-clear" aria-label="Clear search">×</button>
+            </div>
+            <button type="button" class="ghost-btn" id="btn-toggle-pills" aria-expanded="false">
+              <span data-i18n="expand_pills">Expand All</span>
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="stock-selector-wrapper">
-        <div class="market-group" id="market-group-us">
-          <span class="market-label" data-i18n="us_label">🇺🇸 US</span>
-          <div class="pill-group" id="pills-us"></div>
+
+        <!-- Market Pulse Summary Strip -->
+        <div class="market-pulse-strip" id="market-pulse-strip">
+          <div class="pulse-group">
+            <span class="pulse-label pulse-up" data-i18n="pulse_top_upside">▲ Top Upside</span>
+            <div class="pulse-chips" id="pulse-top-upside"></div>
+          </div>
+          <div class="pulse-group">
+            <span class="pulse-label pulse-down" data-i18n="pulse_top_downside">▼ Caution / Downside</span>
+            <div class="pulse-chips" id="pulse-top-downside"></div>
+          </div>
+          <div class="color-legend" aria-label="Color Legend">
+            <span class="legend-item"><i class="dot-emerald"></i><span data-i18n="legend_upside">Upside (+)</span></span>
+            <span class="legend-item"><i class="dot-rose"></i><span data-i18n="legend_downside">Downside (-)</span></span>
+          </div>
         </div>
-        <div class="market-group" id="market-group-kr">
-          <span class="market-label" data-i18n="kr_label">🇰🇷 KR</span>
-          <div class="pill-group" id="pills-kr"></div>
+
+        <!-- Stock Pills Container -->
+        <div class="stock-selector-wrapper collapsed" id="stock-selector-wrapper">
+          <div class="market-group" id="market-group-us">
+            <span class="market-label" data-i18n="us_label">🇺🇸 US</span>
+            <div class="pill-group" id="pills-us"></div>
+          </div>
+          <div class="market-group" id="market-group-kr">
+            <span class="market-label" data-i18n="kr_label">🇰🇷 KR</span>
+            <div class="pill-group" id="pills-kr"></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Summary Cards -->
-    <section class="section cards-section fade-in" style="--delay:.1s">
+    <!-- Section 2: Selected Stock Hero & Visual Target Range Gauge -->
+    <section class="section hero-section fade-in" id="sec-hero" style="--delay:.05s">
+      <div class="glass-panel hero-panel">
+        <div class="hero-top">
+          <div class="hero-identity">
+            <div class="hero-badges">
+              <span class="market-tag" id="hero-market-tag">—</span>
+              <span class="ticker-tag" id="hero-ticker-tag">—</span>
+              <span class="meta-chip" id="hero-vol-badge" title="">σ —</span>
+              <span class="meta-chip meta-chip-accent" id="hero-alpha-badge" title="">α —</span>
+              <span class="meta-chip" id="hero-firms-badge">—</span>
+            </div>
+            <h2 class="hero-stock-name" id="hero-stock-name">—</h2>
+          </div>
+
+          <div class="hero-actions">
+            <button type="button" class="ghost-btn" id="btn-share-stock">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              <span data-i18n="share_link">Share Link</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Visual Price Target Range Gauge -->
+        <div class="range-gauge-box" id="price-range-gauge">
+          <div class="range-gauge-head">
+            <span class="range-gauge-title" data-i18n="gauge_title">Current Price vs Bias-Adjusted Target Range (12M Adj. &amp; 3M Forecast)</span>
+            <span class="range-gauge-verdict" id="gauge-verdict">—</span>
+          </div>
+          <div class="range-track-wrap">
+            <div class="range-track">
+              <div class="range-band" id="gauge-band"></div>
+              <div class="range-marker marker-current" id="marker-current" style="left:50%">
+                <span class="marker-dot"></span>
+                <span class="marker-tag" id="marker-current-tag">—</span>
+              </div>
+              <div class="range-marker marker-pred" id="marker-pred" style="left:50%">
+                <span class="marker-diamond"></span>
+              </div>
+              <div class="range-marker marker-adj" id="marker-adj" style="left:50%">
+                <span class="marker-star">★</span>
+              </div>
+            </div>
+            <div class="range-axis-labels">
+              <span id="gauge-min-label">Min —</span>
+              <div class="range-inline-legend">
+                <span class="rleg"><i class="rleg-dot-cur"></i><span data-i18n="gauge_leg_cur">Current</span></span>
+                <span class="rleg"><i class="rleg-dot-pred"></i><span data-i18n="gauge_leg_pred">3M Pred</span> <strong id="gauge-pred-val">—</strong></span>
+                <span class="rleg"><i class="rleg-dot-adj"></i><span data-i18n="gauge_leg_adj">12M Adj. Mean</span> <strong id="gauge-adj-val">—</strong></span>
+              </div>
+              <span id="gauge-max-label">Max —</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: 4 Balanced KPI Summary Cards -->
+    <section class="section cards-section fade-in" id="sec-kpi" style="--delay:.1s">
       <div class="cards-grid">
         <div class="summary-card" id="card-price">
-          <div class="card-icon icon-price">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <div class="card-head">
+            <p class="card-label" data-i18n="card_price">Current Price</p>
+            <div class="card-icon icon-price" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
           </div>
-          <p class="card-label" data-i18n="card_price">Current Price</p>
-          <p class="card-value" id="val-price">—</p>
+          <p class="card-value num" id="val-price">—</p>
           <p class="card-sub" id="sub-price"></p>
-        </div>
-        <div class="summary-card" id="card-target">
-          <div class="card-icon icon-target">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          <div class="wk52-wrap" id="wk52-wrap">
+            <div class="wk52-labels"><span id="wk52-low">52W L —</span><span id="wk52-high">52W H —</span></div>
+            <div class="wk52-bar"><div class="wk52-fill" id="wk52-fill"></div><div class="wk52-pin" id="wk52-pin"></div></div>
           </div>
-          <p class="card-label" data-i18n="card_target">Avg Target Price</p>
-          <p class="card-value" id="val-target">—</p>
-          <p class="card-sub" id="sub-target"></p>
         </div>
-        <div class="summary-card" id="card-bias">
-          <div class="card-icon icon-bias">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+
+        <div class="summary-card card-featured-adj" id="card-target">
+          <div class="card-head">
+            <p class="card-label">
+              <span data-i18n="card_adj_target">12M Realistic Target</span>
+              <button type="button" class="info-tooltip" data-i18n-tip="tip_adj_target" aria-label="12M Realistic Target info">ⓘ</button>
+            </p>
+            <div class="card-icon icon-target" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            </div>
           </div>
-          <p class="card-label" data-i18n="card_bias">Avg Bias %</p>
-          <p class="card-value" id="val-bias">—</p>
-          <p class="card-sub" id="sub-bias"></p>
+          <p class="card-value num val-hero" id="val-adj-hero">—</p>
+          <p class="card-sub" id="sub-adj-hero"></p>
+          <p class="card-meta" id="meta-raw-compare"></p>
         </div>
-        <div class="summary-card" id="card-prediction">
-          <div class="card-icon icon-pred">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+
+        <div class="summary-card card-featured-pred" id="card-prediction">
+          <div class="card-head">
+            <p class="card-label">
+              <span data-i18n="card_prediction">3M Predicted Price</span>
+              <button type="button" class="info-tooltip" data-i18n-tip="tip_prediction" aria-label="3M Predicted Price info">ⓘ</button>
+            </p>
+            <div class="card-icon icon-pred" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
           </div>
-          <p class="card-label"><span data-i18n="card_prediction">🎯 3M Predicted Price</span><span class="info-tooltip" title="3-month forecast reflecting partial convergence (dynamic α linked to 1Y volatility) from current price toward 12-month bias-adjusted target.">ⓘ</span></p>
-          <p class="card-value val-hero" id="val-prediction">—</p>
+          <p class="card-value num val-cyan" id="val-prediction">—</p>
           <p class="card-sub" id="sub-prediction"></p>
-         </div>
-        <div class="summary-card" id="card-reports">
-          <div class="card-icon icon-reports">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <p class="card-meta" id="meta-pred-model"></p>
+        </div>
+
+        <div class="summary-card" id="card-bias">
+          <div class="card-head">
+            <p class="card-label">
+              <span data-i18n="card_bias">Avg Issuance Bias</span>
+              <button type="button" class="info-tooltip" data-i18n-tip="tip_bias" aria-label="Issuance Bias info">ⓘ</button>
+            </p>
+            <div class="card-icon icon-bias" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+            </div>
           </div>
-          <p class="card-label" data-i18n="card_reports">Active Reports</p>
-          <p class="card-value" id="val-reports">—</p>
-          <p class="card-sub" id="sub-reports"></p>
+          <p class="card-value num" id="val-bias">—</p>
+          <p class="card-sub" id="sub-bias"></p>
+          <p class="card-meta" id="sub-reports"></p>
         </div>
       </div>
     </section>
 
-    <!-- Realistic Target Price Section -->
-    <section class="section realistic-target-section fade-in" style="--delay:.15s">
+    <!-- Section 4: 3-Step Target Price Pipeline Matrix -->
+    <section class="section realistic-target-section fade-in" id="sec-pipeline" style="--delay:.14s">
       <div class="glass-panel realistic-card">
         <div class="realistic-header">
-          <div class="realistic-title-badge">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            <span data-i18n="realistic_title">🎯 Realistic Investment Targets (Bias Adjusted)</span>
+          <div class="realistic-title-group">
+            <span class="realistic-title-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              <span data-i18n="realistic_title">3-Stage Target Adjustment Pipeline (Raw → Bias-Adjusted → 3M Forecast)</span>
+            </span>
+            <p class="realistic-subtitle" data-i18n="realistic_sub">Core statistics (Mean / Median / Max / Min) sequentially adjusted by firm bias &amp; volatility</p>
           </div>
-          <div class="realistic-subtitle" data-i18n="realistic_sub">4 Core Statistics (Max / Min / Median / Mean) adjusted by individual analyst bias history</div>
         </div>
 
         <div class="realistic-stats-columns">
-          <!-- Column 1: Raw Analyst Target Stats -->
+          <!-- Stage 1 -->
           <div class="stats-group raw-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-raw" data-i18n="raw_badge">1. Raw Brokerage Target Prices</span>
+              <span class="step-num">STEP 1</span>
+              <span class="badge badge-raw" data-i18n="raw_badge">Raw Brokerage Targets</span>
             </div>
             <div class="stats-card-grid">
               <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_max">Max Target</span>
-                <span class="stat-box-val" id="raw-stat-max">—</span>
-                <span class="stat-box-sub" id="raw-sub-max"></span>
-              </div>
-              <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_min">Min Target</span>
-                <span class="stat-box-val" id="raw-stat-min">—</span>
-                <span class="stat-box-sub" id="raw-sub-min"></span>
+                <span class="stat-box-label" data-i18n="stat_avg">Mean Target</span>
+                <span class="stat-box-val num" id="raw-stat-avg">—</span>
+                <span class="stat-box-sub num" id="raw-sub-avg"></span>
               </div>
               <div class="stat-box">
                 <span class="stat-box-label" data-i18n="stat_med">Median Target</span>
-                <span class="stat-box-val" id="raw-stat-med">—</span>
-                <span class="stat-box-sub" id="raw-sub-med"></span>
+                <span class="stat-box-val num" id="raw-stat-med">—</span>
+                <span class="stat-box-sub num" id="raw-sub-med"></span>
               </div>
               <div class="stat-box">
-                <span class="stat-box-label" data-i18n="stat_avg">Mean Target</span>
-                <span class="stat-box-val" id="raw-stat-avg">—</span>
-                <span class="stat-box-sub" id="raw-sub-avg"></span>
+                <span class="stat-box-label" data-i18n="stat_max">Max Target</span>
+                <span class="stat-box-val num" id="raw-stat-max">—</span>
+                <span class="stat-box-sub num" id="raw-sub-max"></span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-box-label" data-i18n="stat_min">Min Target</span>
+                <span class="stat-box-val num" id="raw-stat-min">—</span>
+                <span class="stat-box-sub num" id="raw-sub-min"></span>
               </div>
             </div>
           </div>
 
-          <!-- Column 2: Firm-Adjusted Realistic Target Stats -->
+          <!-- Stage 2 -->
           <div class="stats-group adj-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-adj"><span data-i18n="adj_badge">2. 🎯 Realistic Targets (Firm-Bias Adjusted)</span><span class="info-tooltip" title="Realistic 12-month target derived by subtracting historical brokerage forecasting bias from raw analyst consensus.">ⓘ</span></span>
+              <span class="step-num step-adj">STEP 2</span>
+              <span class="badge badge-adj">
+                <span data-i18n="adj_badge">Realistic Targets (Firm-Bias Adjusted)</span>
+                <button type="button" class="info-tooltip" data-i18n-tip="tip_adj_badge" aria-label="Firm-bias adjustment info">ⓘ</button>
+              </span>
             </div>
             <div class="stats-card-grid">
-              <div class="stat-box highlight-box">
-                <span class="stat-box-label" data-i18n="adj_stat_max">Adj. Max Target</span>
-                <span class="stat-box-val val-green" id="adj-stat-max">—</span>
-                <span class="stat-box-sub" id="adj-sub-max"></span>
-              </div>
-              <div class="stat-box highlight-box">
-                <span class="stat-box-label" data-i18n="adj_stat_min">Adj. Min Target</span>
-                <span class="stat-box-val val-blue" id="adj-stat-min">—</span>
-                <span class="stat-box-sub" id="adj-sub-min"></span>
+              <div class="stat-box highlight-box main-target-border">
+                <span class="stat-box-label" data-i18n="adj_stat_avg">Adj. Mean ⭐</span>
+                <span class="stat-box-val num val-hero" id="adj-stat-avg">—</span>
+                <span class="stat-box-sub num" id="adj-sub-avg"></span>
               </div>
               <div class="stat-box highlight-box accent-border">
-                <span class="stat-box-label" data-i18n="adj_stat_med">Adj. Median Target</span>
-                <span class="stat-box-val val-yellow" id="adj-stat-med">—</span>
-                <span class="stat-box-sub" id="adj-sub-med"></span>
+                <span class="stat-box-label" data-i18n="adj_stat_med">Adj. Median</span>
+                <span class="stat-box-val num val-yellow" id="adj-stat-med">—</span>
+                <span class="stat-box-sub num" id="adj-sub-med"></span>
               </div>
-              <div class="stat-box highlight-box main-target-border">
-                <span class="stat-box-label" data-i18n="adj_stat_avg">Adj. Mean Target ⭐</span>
-                <span class="stat-box-val val-hero" id="adj-stat-avg">—</span>
-                <span class="stat-box-sub" id="adj-sub-avg"></span>
+              <div class="stat-box highlight-box">
+                <span class="stat-box-label" data-i18n="adj_stat_max">Adj. Max</span>
+                <span class="stat-box-val num val-green" id="adj-stat-max">—</span>
+                <span class="stat-box-sub num" id="adj-sub-max"></span>
+              </div>
+              <div class="stat-box highlight-box">
+                <span class="stat-box-label" data-i18n="adj_stat_min">Adj. Min</span>
+                <span class="stat-box-val num val-blue" id="adj-stat-min">—</span>
+                <span class="stat-box-sub num" id="adj-sub-min"></span>
               </div>
             </div>
           </div>
 
-          <!-- Column 3: 3-Month Price Prediction Stats -->
+          <!-- Stage 3 -->
           <div class="stats-group pred-stats-group">
             <div class="stats-group-title">
-              <span class="badge badge-pred"><span data-i18n="pred_badge">3. 🎯 3-Month Price Prediction (Statistical Model)</span><span class="info-tooltip" title="Simulated 3-month price bounds using dynamic volatility-adjusted convergence rate (α=2~10%).">ⓘ</span></span>
+              <span class="step-num step-pred">STEP 3</span>
+              <span class="badge badge-pred">
+                <span data-i18n="pred_badge">3-Month Prediction (Statistical Model)</span>
+                <button type="button" class="info-tooltip" data-i18n-tip="tip_pred_badge" aria-label="3-Month statistical model info">ⓘ</button>
+              </span>
             </div>
             <div class="stats-card-grid">
-              <div class="stat-box pred-highlight-box">
-                <span class="stat-box-label" data-i18n="pred_stat_max">Pred. Max Price</span>
-                <span class="stat-box-val val-green" id="pred-stat-max">—</span>
-                <span class="stat-box-sub" id="pred-sub-max"></span>
-              </div>
-              <div class="stat-box pred-highlight-box">
-                <span class="stat-box-label" data-i18n="pred_stat_min">Pred. Min Price</span>
-                <span class="stat-box-val val-blue" id="pred-stat-min">—</span>
-                <span class="stat-box-sub" id="pred-sub-min"></span>
+              <div class="stat-box pred-highlight-box main-pred-border">
+                <span class="stat-box-label" data-i18n="pred_stat_avg">Pred. Mean ⭐</span>
+                <span class="stat-box-val num val-cyan" id="pred-stat-avg">—</span>
+                <span class="stat-box-sub num" id="pred-sub-avg"></span>
               </div>
               <div class="stat-box pred-highlight-box accent-border">
-                <span class="stat-box-label" data-i18n="pred_stat_med">Pred. Median Price</span>
-                <span class="stat-box-val val-yellow" id="pred-stat-med">—</span>
-                <span class="stat-box-sub" id="pred-sub-med"></span>
+                <span class="stat-box-label" data-i18n="pred_stat_med">Pred. Median</span>
+                <span class="stat-box-val num val-yellow" id="pred-stat-med">—</span>
+                <span class="stat-box-sub num" id="pred-sub-med"></span>
               </div>
-              <div class="stat-box pred-highlight-box main-target-border">
-                <span class="stat-box-label" data-i18n="pred_stat_avg">Pred. Mean Price ⭐</span>
-                <span class="stat-box-val val-hero" id="pred-stat-avg">—</span>
-                <span class="stat-box-sub" id="pred-sub-avg"></span>
+              <div class="stat-box pred-highlight-box">
+                <span class="stat-box-label" data-i18n="pred_stat_max">Pred. Max</span>
+                <span class="stat-box-val num val-green" id="pred-stat-max">—</span>
+                <span class="stat-box-sub num" id="pred-sub-max"></span>
+              </div>
+              <div class="stat-box pred-highlight-box">
+                <span class="stat-box-label" data-i18n="pred_stat_min">Pred. Min</span>
+                <span class="stat-box-val num val-blue" id="pred-stat-min">—</span>
+                <span class="stat-box-sub num" id="pred-sub-min"></span>
               </div>
             </div>
           </div>
         </div>
 
         <div class="realistic-footer-note" id="realistic-footer-note">
-          * Calculated by taking the single latest report per firm (within 90d) across firms and adjusting each target price by historical 1-yr bias: T_adj = T_raw / (1 + B_firm/100).
+          * Calculated by taking the latest report per firm (within 90d) and adjusting each target price by historical 3-mo realized bias using Bayesian Shrinkage.
         </div>
       </div>
     </section>
 
-    <!-- Chart 1: Price + Target Timeline -->
-    <section class="section fade-in" style="--delay:.2s">
+    <!-- Section Quick Navigation (ScrollSpy) -->
+    <nav class="section-nav fade-in" id="section-nav" aria-label="Analytics Sections" style="--delay:.16s">
+      <a href="#sec-timeline" class="sec-nav-link active" data-sec="sec-timeline" data-i18n="nav_timeline">📈 Timeline</a>
+      <a href="#sec-ranking" class="sec-nav-link" data-sec="sec-ranking" data-i18n="nav_ranking">🏆 Firm Ranking</a>
+      <a href="#sec-heatmap" class="sec-nav-link" data-sec="sec-heatmap" data-i18n="nav_heatmap">🔥 Market Heatmap</a>
+      <a href="#sec-accuracy" class="sec-nav-link" data-sec="sec-accuracy" data-i18n="nav_accuracy">📉 Accuracy Trend</a>
+      <a href="#sec-reports" class="sec-nav-link" data-sec="sec-reports" data-i18n="nav_reports">📋 Reports</a>
+    </nav>
+
+    <!-- Section 5: Chart 1 — Price + Target Timeline -->
+    <section class="section fade-in" id="sec-timeline" style="--delay:.18s">
       <div class="section-header">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          <span data-i18n="timeline_title">Price & Target Timeline</span>
-        </h2>
-        <div class="scale-toggle-group" id="timeline-scale-toggles">
-          <button class="scale-btn" data-scale="linear" data-i18n="scale_linear">📏 Linear Scale</button>
-          <button class="scale-btn active" data-scale="log" data-i18n="scale_log">📊 Log Scale</button>
-          <button class="scale-btn" data-scale="pct" data-i18n="scale_pct">🎯 Bias (%)</button>
+        <div class="section-title-wrap">
+          <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span data-i18n="timeline_title">Price &amp; Target Timeline</span>
+          </h2>
+          <p class="section-desc" data-i18n="timeline_desc">Top 8 coverage firms highlighted individually · remaining firms grouped cleanly (hover for full report details)</p>
+        </div>
+
+        <div class="chart-toolbar">
+          <div class="scale-toggle-group" id="timeline-range-toggles" role="group" aria-label="Timeframe">
+            <button type="button" class="scale-btn" data-range="6M">6M</button>
+            <button type="button" class="scale-btn" data-range="1Y">1Y</button>
+            <button type="button" class="scale-btn active" data-range="3Y">3Y</button>
+            <button type="button" class="scale-btn" data-range="5Y">5Y</button>
+            <button type="button" class="scale-btn" data-range="ALL">ALL</button>
+          </div>
+
+          <div class="scale-toggle-group" id="timeline-scale-toggles" role="group" aria-label="Scale Mode">
+            <button type="button" class="scale-btn" data-scale="linear" data-i18n="scale_linear">Linear</button>
+            <button type="button" class="scale-btn active" data-scale="log" data-i18n="scale_log">Log Scale</button>
+            <button type="button" class="scale-btn" data-scale="pct" data-i18n="scale_pct">Bias (%)</button>
+          </div>
+
+          <button type="button" class="toggle-chip active" id="toggle-target-lines" aria-pressed="true" data-i18n="toggle_guides">Target Guides</button>
         </div>
       </div>
       <div class="glass-panel chart-panel">
@@ -308,72 +491,119 @@
       </div>
     </section>
 
-    <!-- Chart 2: Firm Bias Ranking -->
-    <section class="section fade-in" style="--delay:.3s">
+    <!-- Section 6: Chart 2 — Firm Bias Ranking -->
+    <section class="section fade-in" id="sec-ranking" style="--delay:.22s">
       <div class="section-header">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-          <span data-i18n="ranking_title">Firm Bias Ranking</span>
-        </h2>
-        <p class="section-desc" data-i18n="ranking_sub">Average analyst target price bias by firm for selected stock</p>
+        <div class="section-title-wrap">
+          <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            <span data-i18n="ranking_title">Firm Bias Ranking</span>
+          </h2>
+          <p class="section-desc" id="ranking-subtitle" data-i18n="ranking_sub">Average analyst target price issuance bias by firm (parentheses: report count)</p>
+        </div>
+
+        <div class="chart-toolbar">
+          <div class="scale-toggle-group" id="ranking-min-filter" role="group" aria-label="Minimum reports">
+            <button type="button" class="scale-btn" data-min="1" data-i18n="min_rep_1">All</button>
+            <button type="button" class="scale-btn active" data-min="3" data-i18n="min_rep_3">3+</button>
+            <button type="button" class="scale-btn" data-min="5" data-i18n="min_rep_5">5+</button>
+          </div>
+          <div class="scale-toggle-group" id="ranking-mode-toggles" role="group" aria-label="Ranking view mode">
+            <button type="button" class="scale-btn active" data-mode="compact" data-i18n="rank_compact">Top/Bottom 16</button>
+            <button type="button" class="scale-btn" data-mode="all" data-i18n="rank_all">Show All</button>
+          </div>
+        </div>
       </div>
       <div class="glass-panel chart-panel">
         <div id="chart-bias-ranking"></div>
       </div>
     </section>
 
-    <!-- Charts row: Heatmap + Accuracy Trend -->
-    <div class="charts-row fade-in" style="--delay:.4s">
-      <!-- Chart 3: Heatmap -->
-      <section class="section section-half">
-        <div class="section-header">
+    <!-- Section 7: Chart 3 — Full-Width Market Heatmap -->
+    <section class="section fade-in" id="sec-heatmap" style="--delay:.26s">
+      <div class="section-header">
+        <div class="section-title-wrap">
           <h2 class="section-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            <span data-i18n="heatmap_title">Firm × Stock Heatmap</span>
+            <span data-i18n="heatmap_title">Firm × Stock Bias Heatmap</span>
           </h2>
+          <p class="section-desc" data-i18n="heatmap_sub">Average brokerage bias per stock by market · Click any cell to jump to that stock</p>
         </div>
-        <div class="glass-panel chart-panel">
-          <div id="chart-heatmap"></div>
-        </div>
-      </section>
-
-      <!-- Chart 4: Accuracy Trend -->
-      <section class="section section-half">
-        <div class="section-header">
-          <h2 class="section-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            <span data-i18n="accuracy_title">Prediction Accuracy Trend</span>
-          </h2>
-          <p class="section-desc" data-i18n="accuracy_sub">Top 5 coverage firms rolling bias trend</p>
-        </div>
-        <div class="glass-panel chart-panel">
-          <div id="chart-accuracy"></div>
-        </div>
-      </section>
-    </div>
-
-    <!-- Reports Table -->
-    <section class="section fade-in" style="--delay:.5s">
-      <div class="section-header">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span data-i18n="table_title">All Research Reports</span>
-        </h2>
-        <div class="table-controls">
-          <input type="text" id="table-search" class="table-search" placeholder="Search (Firm, Stock, Analyst...)" data-i18n-ph="table_search_placeholder" />
+        <div class="chart-toolbar">
+          <div class="scale-toggle-group" id="heatmap-market-toggles" role="group" aria-label="Heatmap Market">
+            <button type="button" class="scale-btn active" data-hmarket="US" data-i18n="tab_us">🇺🇸 US 21</button>
+            <button type="button" class="scale-btn" data-hmarket="KR" data-i18n="tab_kr">🇰🇷 KR 21</button>
+          </div>
         </div>
       </div>
+      <div class="glass-panel chart-panel">
+        <div id="chart-heatmap"></div>
+      </div>
+    </section>
+
+    <!-- Section 8: Chart 4 — Accuracy Trend -->
+    <section class="section fade-in" id="sec-accuracy" style="--delay:.3s">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            <span data-i18n="accuracy_title">Prediction Accuracy Trend (Rolling |Realized Error|)</span>
+          </h2>
+          <p class="section-desc" data-i18n="accuracy_sub">Lower values indicate tighter realized price accuracy (Top 5 coverage firms)</p>
+        </div>
+        <div class="chart-toolbar">
+          <div class="scale-toggle-group" id="accuracy-scope-toggles" role="group" aria-label="Accuracy Scope">
+            <button type="button" class="scale-btn active" data-scope="stock" data-i18n="acc_scope_stock">Selected Stock</button>
+            <button type="button" class="scale-btn" data-scope="market" data-i18n="acc_scope_market">6 Major Leaders</button>
+          </div>
+        </div>
+      </div>
+      <div class="glass-panel chart-panel">
+        <div id="chart-accuracy"></div>
+      </div>
+    </section>
+
+    <!-- Section 9: Reports Table -->
+    <section class="section fade-in" id="sec-reports" style="--delay:.34s">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span data-i18n="table_title">All Research Reports</span>
+          </h2>
+        </div>
+
+        <div class="table-controls">
+          <div class="filter-chip-group" id="table-category-filters" role="group" aria-label="Bias Category Filter">
+            <button type="button" class="filter-chip active" data-cat="ALL" data-i18n="cat_all">All</button>
+            <button type="button" class="filter-chip" data-cat="overly_optimistic" data-i18n="cat_overly_optimistic">Overly Optimistic</button>
+            <button type="button" class="filter-chip" data-cat="optimistic" data-i18n="cat_optimistic">Optimistic</button>
+            <button type="button" class="filter-chip" data-cat="accurate" data-i18n="cat_accurate">Accurate</button>
+            <button type="button" class="filter-chip" data-cat="conservative" data-i18n="cat_conservative">Conservative</button>
+          </div>
+          <div class="search-input-wrap">
+            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="table-search" class="table-search compact-search" placeholder="Search (Firm, Analyst, Date)..." data-i18n-ph="table_search_placeholder" autocomplete="off" />
+            <button type="button" class="search-clear-btn hidden" id="table-search-clear" aria-label="Clear table search">×</button>
+          </div>
+          <button type="button" class="ghost-btn" id="btn-export-csv">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span data-i18n="export_csv">CSV</span>
+          </button>
+        </div>
+      </div>
+
       <div class="glass-panel table-panel">
         <div class="table-scroll">
           <table class="report-table" id="report-table">
             <thead>
               <tr>
                 <th data-sort="date" class="sortable active-sort"><span data-i18n="th_date">Date</span> <span class="sort-icon">▼</span></th>
-                <th data-sort="stock" class="sortable"><span data-i18n="th_stock">Stock</span> <span class="sort-icon">⇅</span></th>
                 <th data-sort="firm" class="sortable"><span data-i18n="th_firm">Firm</span> <span class="sort-icon">⇅</span></th>
                 <th data-sort="analyst" class="sortable"><span data-i18n="th_analyst">Analyst</span> <span class="sort-icon">⇅</span></th>
-                <th data-sort="target" class="sortable"><span data-i18n="th_target">Target Price</span> <span class="sort-icon">⇅</span></th>
-                <th data-sort="bias" class="sortable"><span data-i18n="th_bias">Bias (%)</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="reportPrice" class="sortable num-col"><span data-i18n="th_date_price">Price on Date</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="target" class="sortable num-col"><span data-i18n="th_target">Target Price</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="bias" class="sortable num-col"><span data-i18n="th_bias">Issuance Bias (%)</span> <span class="sort-icon">⇅</span></th>
                 <th data-i18n="th_category">Category</th>
               </tr>
             </thead>
@@ -392,7 +622,62 @@
     <p data-i18n="footer">© 2026 Stock Consensus Prediction Analytics &nbsp;|&nbsp; For informational purposes only, not investment advice.</p>
   </footer>
 
+  <!-- Quick Search Command Palette Modal -->
+  <div class="modal-backdrop hidden" id="cmd-palette-modal" role="dialog" aria-modal="true" aria-labelledby="cmd-palette-title">
+    <div class="modal-card cmd-modal-card">
+      <div class="cmd-input-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="cmd-palette-input" class="cmd-input" placeholder="Search stock or ticker (↑↓ navigate · Enter select · ESC close)" data-i18n-ph="cmd_placeholder" autocomplete="off" />
+        <button type="button" class="modal-close-btn" id="cmd-palette-close" aria-label="Close">ESC</button>
+      </div>
+      <div class="sr-only" id="cmd-palette-title" data-i18n="quick_jump">Quick Jump</div>
+      <div class="cmd-results" id="cmd-palette-results" role="listbox"></div>
+    </div>
+  </div>
+
+  <!-- 42-Stock Market Screener Modal -->
+  <div class="modal-backdrop hidden" id="screener-modal" role="dialog" aria-modal="true" aria-labelledby="screener-title">
+    <div class="modal-card screener-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="screener-title" data-i18n="screener_title">42-Stock Consensus Comparison Screener</h3>
+          <p class="modal-sub" data-i18n="screener_sub">Click any row to open its full consensus analytics view</p>
+        </div>
+        <div class="modal-header-actions">
+          <div class="segmented-tabs" id="screener-market-tabs">
+            <button type="button" class="seg-tab active" data-smarket="ALL" data-i18n="tab_all">All 42</button>
+            <button type="button" class="seg-tab" data-smarket="US" data-i18n="tab_us">🇺🇸 US 21</button>
+            <button type="button" class="seg-tab" data-smarket="KR" data-i18n="tab_kr">🇰🇷 KR 21</button>
+          </div>
+          <button type="button" class="modal-close-btn" id="screener-close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="screener-table-wrap">
+        <table class="report-table screener-table" id="screener-table">
+          <thead>
+            <tr>
+              <th data-ssort="name" class="sortable"><span data-i18n="th_stock">Stock</span> <span class="sort-icon">⇅</span></th>
+              <th data-ssort="current_price" class="sortable num-col"><span data-i18n="card_price">Current Price</span> <span class="sort-icon">⇅</span></th>
+              <th data-ssort="adj_mean" class="sortable num-col"><span data-i18n="scr_adj_mean">12M Adj. Mean</span> <span class="sort-icon">⇅</span></th>
+              <th data-ssort="upside" class="sortable active-sort num-col"><span data-i18n="scr_upside">Adj. Upside</span> <span class="sort-icon">▼</span></th>
+              <th data-ssort="pred_3m" class="sortable num-col"><span data-i18n="scr_pred_3m">3M Forecast</span> <span class="sort-icon">⇅</span></th>
+              <th data-ssort="volatility" class="sortable num-col"><span data-i18n="scr_vol">Volatility (σ)</span> <span class="sort-icon">⇅</span></th>
+              <th data-ssort="alpha" class="sortable num-col">α <span class="sort-icon">⇅</span></th>
+              <th data-ssort="firms" class="sortable num-col"><span data-i18n="scr_firms">Active Firms</span> <span class="sort-icon">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody id="screener-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Custom Tooltip & Toast -->
+  <div id="custom-tooltip" class="custom-tooltip hidden" role="tooltip"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
   <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.0"></script>
+  <script src="utils.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
