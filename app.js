@@ -12,7 +12,7 @@
   }
 
   // ── Constants & Market Cap Order ──
-  const USD_KRW_RATE = U.DEFAULT_FX_RATE;
+  let USD_KRW_RATE = U.DEFAULT_FX_RATE;
   const PAGE_SIZE = 15;
 
   const US_ORDER = [
@@ -133,11 +133,20 @@
       firms_chip: '활성 증권사 {count}곳',
       vol_chip_title: '최근 1년 일별 로그수익률 기준 연율화 변동성',
       alpha_chip_title: '종목 변동성에 연동된 3개월 가격 수렴 계수 (2~10%)',
-      tip_adj_target: '각 증권사의 과거 3개월 실현 오차(Bias)를 베이지안 수축 모델로 보정해 낙관 거품을 제거한 12개월 현실적 평균 목표가입니다.',
-      tip_prediction: '현재가에서 12개월 현실적 목표가로의 3개월 수렴 속도를 종목 변동성 연동 동적 α(2~10%)로 시뮬레이션한 단기 예측치입니다.',
+      tip_adj_target: '각 증권사의 최근 2년 가중 실현 오차(Bias)를 베이지안 수축 모델로 보정하고 극단치를 절사(Winsorize)해 산출한 12개월 현실적 목표가입니다.',
+      tip_prediction: 'Hybrid v2 모델: 분기 기초 드리프트(+1.0%) + 변동성 연동 보정 수렴(0.5·α·Gap) + 90일 애널리스트 상·하향 리비전 모멘텀(2.5%·B_rev)을 결합한 3개월 예측가 및 68% 신뢰구간(±1σ)입니다.',
       tip_bias: '리포트 발표 당일(±7일 이내) 실제 주가 대비 증권사가 제시한 목표가의 평균 프리미엄(%)입니다.',
-      tip_adj_badge: 'T_adj = T_raw ÷ (1 + B_shrunk / 100). 표본이 적은 증권사의 왜곡을 막기 위해 글로벌 평균 편향으로 베이지안 수축을 적용합니다.',
-      tip_pred_badge: 'P_3m = P_now + α_i × (T_adj - P_now). 고변동성 성장주는 높은 α, 저변동성 방어주는 낮은 α가 자동 적용됩니다.',
+      tip_adj_badge: 'T_adj = T_raw ÷ (1 + B_shrunk / 100). 최근 2년 반감기 가중치와 베이지안 수축(k=5), 10~90% 윈저라이징으로 극단치 왜곡을 방지합니다.',
+      tip_pred_badge: 'Hybrid v2 (r_3m = 1.0% + 0.5·α_i·Gap + 2.5%·B_rev). 2024~2026 Out-of-Sample 검증 방향 적중률 58.2%, sMAPE 14.57%로 기존 모델 및 랜덤워크를 상회합니다.',
+      rev_chip_tpl: '리비전 ↑{up} · ↓{down}',
+      rev_chip_none: '리비전 중립',
+      disp_chip_tpl: '의견 일치도: {label} (IQR {iqr}%)',
+      ci68_prefix: '68% 예상 구간: ',
+      proof_tpl: '🔬 {version} Out-of-Sample 검증 ({window}): 방향 적중률 <strong>{dir}%</strong> · sMAPE <strong>{smape}%</strong> (랜덤워크 {naive}%) · 68% CI 커버리지 <strong>{ci}%</strong>',
+      hm_metric_issuance: '발표 괴리율',
+      hm_metric_realized: '3M 실현 오차',
+      th_adj_target: '보정 목표가',
+      scr_revision: '리비전 (상/하)',
       realistic_title: '3단계 목표가 보정 파이프라인 (Raw → Bias-Adjusted → 3M Forecast)',
       realistic_sub: '증권사별 고유 편향 오차(Bias)와 종목 변동성을 단계적으로 반영한 4대 핵심 통계',
       raw_badge: '증권사 단순 제시 목표가',
@@ -275,11 +284,20 @@
       firms_chip: '{count} Active Firms',
       vol_chip_title: '1-year annualized volatility from daily log returns',
       alpha_chip_title: 'Dynamic 3-month convergence factor scaled by volatility (2–10%)',
-      tip_adj_target: 'Realistic 12-month target mean derived by adjusting each brokerage target for its historical 3-month realized bias using Bayesian shrinkage.',
-      tip_prediction: '3-month price forecast modeling partial convergence from current price toward the 12-month adjusted target using volatility-linked dynamic α (2–10%).',
+      tip_adj_target: 'Realistic 12-month target derived by adjusting each brokerage target for its 2-year recency-weighted realized bias using Bayesian shrinkage and Winsorization.',
+      tip_prediction: 'Hybrid v2 3-month forecast combining baseline drift (+1.0%), volatility-scaled adjusted convergence (0.5·α·Gap), and 90d analyst revision breadth (+2.5%·B_rev) with a 68% (±1σ) confidence band.',
       tip_bias: 'Average target premium (%) over the stock closing price on each report issuance date (±7d window).',
-      tip_adj_badge: 'T_adj = T_raw / (1 + B_shrunk / 100). Bayesian shrinkage pulls low-sample firm estimates toward the global firm mean.',
-      tip_pred_badge: 'P_3m = P_now + α_i × (T_adj - P_now). Higher-volatility stocks receive faster convergence α; defensive stocks receive lower α.',
+      tip_adj_badge: 'T_adj = T_raw / (1 + B_shrunk / 100). Uses 2-year half-life recency weighting, Bayesian shrinkage (k=5), and 10–90% Winsorization.',
+      tip_pred_badge: 'Hybrid v2 (r_3m = 1.0% + 0.5·α_i·Gap + 2.5%·B_rev). Validated on 2024–2026 holdout: 58.2% directional accuracy, 14.57% sMAPE vs 14.80% random walk.',
+      rev_chip_tpl: 'Revisions ↑{up} · ↓{down}',
+      rev_chip_none: 'Revisions Flat',
+      disp_chip_tpl: 'Consensus: {label} (IQR {iqr}%)',
+      ci68_prefix: '68% Band: ',
+      proof_tpl: '🔬 {version} Out-of-Sample ({window}): Dir. Accuracy <strong>{dir}%</strong> · sMAPE <strong>{smape}%</strong> (Naive {naive}%) · 68% CI Coverage <strong>{ci}%</strong>',
+      hm_metric_issuance: 'Issuance Bias',
+      hm_metric_realized: '3M Realized Error',
+      th_adj_target: 'Adj. Target',
+      scr_revision: 'Revisions (↑/↓)',
       realistic_title: '3-Stage Target Adjustment Pipeline (Raw → Bias-Adjusted → 3M Forecast)',
       realistic_sub: 'Core statistics (Mean / Median / Max / Min) sequentially adjusted by firm bias & volatility',
       raw_badge: 'Raw Brokerage Targets',
@@ -394,6 +412,7 @@
   let rankingMode = 'compact';
   let rankingMinReports = 3;
   let heatmapMarket = isEnPage ? 'US' : 'KR';
+  let heatmapMetric = 'issuance';
   let accuracyScope = 'stock';
 
   // Computed stats cache for current stock (used by Hero, KPI, Pipeline, Timeline Guides, Sticky Bar)
@@ -934,6 +953,11 @@
     }
 
     const wk52 = U.compute52WeekStats(stock.price_history, currentPrice);
+    const revMomentum = summary.revision_momentum || { up_count: 0, down_count: 0, hold_count: 0, breadth: 0, median_change_pct: 0 };
+    const dispersionPct = summary.consensus_dispersion_pct != null ? summary.consensus_dispersion_pct : null;
+    const predCiLow = summary.pred_ci_low || null;
+    const predCiHigh = summary.pred_ci_high || null;
+
     return {
       stock,
       summary,
@@ -945,6 +969,10 @@
       rawStats,
       adjStats,
       predStats,
+      predCiLow,
+      predCiHigh,
+      dispersionPct,
+      revMomentum,
       wk52,
     };
   }
@@ -978,6 +1006,26 @@
     const firmsEl = document.getElementById('hero-firms-badge');
     if (firmsEl) {
       firmsEl.textContent = dict.firms_chip.replace('{count}', m.activeReports.length);
+    }
+
+    const revEl = document.getElementById('hero-rev-badge');
+    if (revEl) {
+      const rm = m.revMomentum;
+      if (rm && (rm.up_count > 0 || rm.down_count > 0)) {
+        revEl.textContent = dict.rev_chip_tpl.replace('{up}', rm.up_count).replace('{down}', rm.down_count);
+        revEl.className = `meta-chip ${rm.breadth > 0.15 ? 'meta-chip-up' : (rm.breadth < -0.15 ? 'meta-chip-down' : '')}`;
+      } else {
+        revEl.textContent = dict.rev_chip_none;
+        revEl.className = 'meta-chip';
+      }
+    }
+
+    const dispEl = document.getElementById('hero-disp-badge');
+    if (dispEl) {
+      const dInfo = U.classifyDispersion(m.dispersionPct, currentLang);
+      const iqrStr = m.dispersionPct != null ? m.dispersionPct.toFixed(0) : '—';
+      dispEl.textContent = dict.disp_chip_tpl.replace('{label}', dInfo.label).replace('{iqr}', iqrStr);
+      dispEl.className = `meta-chip ${dInfo.cls}`;
     }
 
     // 2. Price Target Range Gauge
@@ -1070,6 +1118,12 @@
     subPred.className = `card-sub num ${predUpsidePct >= 0 ? 'text-up' : 'text-down'}`;
     document.getElementById('meta-pred-model').textContent =
       `α = ${(m.alpha * 100).toFixed(1)}%` + (m.vol != null ? ` · 1Y σ = ${(m.vol * 100).toFixed(1)}%` : '');
+    const ciEl = document.getElementById('meta-pred-ci');
+    if (ciEl) {
+      ciEl.textContent = (m.predCiLow && m.predCiHigh)
+        ? `${dict.ci68_prefix}${formatPrice(m.predCiLow, market)} ~ ${formatPrice(m.predCiHigh, market)}`
+        : '';
+    }
 
     // Card 4: Avg Issuance Bias + Coverage
     if (m.avgBias != null) {
@@ -1112,6 +1166,18 @@
 
     const noteEl = document.getElementById('realistic-footer-note');
     if (noteEl) noteEl.textContent = dict.footer_note.replace('{count}', m.activeReports.length);
+
+    const proofEl = document.getElementById('model-proof-strip');
+    if (proofEl && DATA && DATA.model_meta) {
+      const mm = DATA.model_meta;
+      proofEl.innerHTML = dict.proof_tpl
+        .replace('{version}', mm.version)
+        .replace('{window}', mm.backtest_window)
+        .replace('{dir}', mm.dir_accuracy_pct)
+        .replace('{smape}', mm.smape_pct)
+        .replace('{naive}', mm.naive_smape_pct)
+        .replace('{ci}', mm.ci68_coverage_pct);
+    }
   }
 
   // ── Chart 1: Price + Target Timeline (with Timeframe, Grouping, & Guides) ──
@@ -1446,13 +1512,15 @@
       .slice(0, 16);
 
     const EMPTY_SENTINEL = -9999;
+    const metricKey = heatmapMetric === 'realized' ? 'avg_realized_bias' : 'avg_bias';
     const series = firms.map(({ firm, stats }) => {
       const data = marketTickers.map(ticker => {
         const entry = stats.by_stock && stats.by_stock[ticker];
-        const hasBias = entry && entry.avg_bias != null && isFinite(entry.avg_bias);
+        const rawVal = entry ? entry[metricKey] : null;
+        const hasBias = rawVal != null && isFinite(rawVal);
         return {
           x: heatmapMarket === 'US' ? ticker : getStockName(DATA.stocks[ticker]),
-          y: hasBias ? parseFloat(entry.avg_bias.toFixed(1)) : EMPTY_SENTINEL,
+          y: hasBias ? parseFloat(rawVal.toFixed(1)) : EMPTY_SENTINEL,
           ticker
         };
       });
@@ -1630,11 +1698,17 @@
   function buildTableData() {
     allTableData = [];
     const stock = STOCK_CACHE[selectedTicker] || DATA.stocks[selectedTicker];
+    const firmBiasMap = (stock && stock.firm_bias_map) || {};
     if (stock && stock.analyst_reports) {
       stock.analyst_reports.forEach(r => {
         const reportPrice = U.getPriceOnDate(stock.price_history, r.date, 7);
         const issuanceBias = getReportIssuanceBias(stock, r);
         const bc = biasCategoryInfo(issuanceBias);
+        const fs = (DATA.firm_stats && DATA.firm_stats[r.firm]) || {};
+        const firmBias = firmBiasMap[r.firm] !== undefined
+          ? firmBiasMap[r.firm]
+          : (fs.avg_realized_bias_recency_pct ?? fs.avg_realized_bias_pct ?? 15.0);
+        const adjTarget = U.computeAdjustedTarget(r.target_price, firmBias);
         allTableData.push({
           date: r.date,
           stock: getStockName(stock),
@@ -1645,6 +1719,7 @@
           analyst: r.analyst || '—',
           reportPrice,
           target: r.target_price,
+          adjTarget,
           bias: issuanceBias,
           catKey: bc.key,
           category: bc.label,
@@ -1681,7 +1756,7 @@
     const { key, dir } = sortState;
     filteredData.sort((a, b) => {
       let va = a[key], vb = b[key];
-      if (key === 'target' || key === 'bias' || key === 'reportPrice') {
+      if (key === 'target' || key === 'adjTarget' || key === 'bias' || key === 'reportPrice') {
         va = va ?? -Infinity;
         vb = vb ?? -Infinity;
         return dir === 'asc' ? va - vb : vb - va;
@@ -1705,7 +1780,7 @@
     const page = filteredData.slice(start, start + PAGE_SIZE);
 
     if (!page.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty-table-cell">${dict.table_empty}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-table-cell">${dict.table_empty}</td></tr>`;
     } else {
       tbody.innerHTML = page.map(r => `<tr>
         <td class="num">${r.date}</td>
@@ -1713,6 +1788,7 @@
         <td>${r.analyst}</td>
         <td class="num-col">${r.reportPrice != null ? formatPrice(r.reportPrice, r.market) : '—'}</td>
         <td class="num-col"><strong>${formatPrice(r.target, r.market)}</strong></td>
+        <td class="num-col val-hero">${r.adjTarget != null ? formatPrice(r.adjTarget, r.market) : '—'}</td>
         <td class="num-col" style="color:${biasColor(r.bias)};font-weight:700">${formatPercent(r.bias)}</td>
         <td><span class="badge ${r.catCls}">${r.category}</span></td>
       </tr>`).join('');
@@ -1763,7 +1839,7 @@
   function exportFilteredCsv() {
     if (!filteredData.length) return;
     const dict = I18N[currentLang];
-    const headers = [dict.th_date, dict.th_stock, 'Ticker', dict.th_firm, dict.th_analyst, dict.th_date_price, dict.th_target, dict.th_bias, dict.th_category];
+    const headers = [dict.th_date, dict.th_stock, 'Ticker', dict.th_firm, dict.th_analyst, dict.th_date_price, dict.th_target, dict.th_adj_target, dict.th_bias, dict.th_category];
     const csv = '\uFEFF' + U.buildReportsCsv(filteredData, headers);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1855,18 +1931,24 @@
     const tbody = document.getElementById('screener-tbody');
     if (!tbody || !DATA) return;
 
-    let rows = Object.values(DATA.stocks).map(s => ({
-      ticker: s.ticker,
-      market: s.market,
-      name: getStockName(s),
-      current_price: s.current_price,
-      adj_mean: s.adj_stats ? s.adj_stats.mean : null,
-      upside: s.realistic_median_upside ?? 0,
-      pred_3m: s.predicted_price_3m ?? null,
-      volatility: s.volatility_annualized ?? 0,
-      alpha: s.alpha_applied ?? 0.05,
-      firms: s.active_firms_count ?? 0,
-    }));
+    let rows = Object.values(DATA.stocks).map(s => {
+      const rm = s.revision_momentum || { up_count: 0, down_count: 0, breadth: 0 };
+      return {
+        ticker: s.ticker,
+        market: s.market,
+        name: getStockName(s),
+        current_price: s.current_price,
+        adj_mean: s.adj_stats ? s.adj_stats.mean : null,
+        upside: s.realistic_median_upside ?? 0,
+        pred_3m: s.predicted_price_3m ?? null,
+        rev_up: rm.up_count || 0,
+        rev_down: rm.down_count || 0,
+        rev_breadth: rm.breadth || 0,
+        volatility: s.volatility_annualized ?? 0,
+        alpha: s.alpha_applied ?? 0.05,
+        firms: s.active_firms_count ?? 0,
+      };
+    });
 
     if (screenerMarket !== 'ALL') rows = rows.filter(r => r.market === screenerMarket);
 
@@ -1883,6 +1965,8 @@
 
     tbody.innerHTML = rows.map(r => {
       const upCls = r.upside >= 0 ? 'text-up' : 'text-down';
+      const revCls = r.rev_breadth > 0.15 ? 'text-up' : (r.rev_breadth < -0.15 ? 'text-down' : '');
+      const revStr = (r.rev_up || r.rev_down) ? `↑${r.rev_up} / ↓${r.rev_down}` : '—';
       const activeCls = r.ticker === selectedTicker ? 'active-row' : '';
       return `<tr class="${activeCls}" data-ticker="${r.ticker}">
         <td><span class="mini-market-badge" style="margin-right:6px">${r.market}</span><strong>${r.name}</strong> <span style="color:var(--text-tertiary);font-size:.72rem">${r.ticker}</span></td>
@@ -1890,6 +1974,7 @@
         <td class="num-col">${formatPrice(r.adj_mean, r.market)}</td>
         <td class="num-col"><strong class="${upCls}">${formatPercent(r.upside)}</strong></td>
         <td class="num-col val-cyan">${formatPrice(r.pred_3m, r.market)}</td>
+        <td class="num-col ${revCls}" style="font-weight:600">${revStr}</td>
         <td class="num-col">${(r.volatility * 100).toFixed(1)}%</td>
         <td class="num-col">${(r.alpha * 100).toFixed(1)}%</td>
         <td class="num-col">${r.firms}</td>
@@ -1960,6 +2045,19 @@
         rankingMode = btn.dataset.mode;
         rankModeGroup.querySelectorAll('.scale-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === rankingMode));
         renderBiasRanking();
+      });
+    }
+
+    // Heatmap metric toggle (issuance vs realized)
+    const hmMetricGroup = document.getElementById('heatmap-metric-toggles');
+    if (hmMetricGroup && !hmMetricGroup.dataset.bound) {
+      hmMetricGroup.dataset.bound = 'true';
+      hmMetricGroup.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-hmetric]');
+        if (!btn || btn.dataset.hmetric === heatmapMetric) return;
+        heatmapMetric = btn.dataset.hmetric;
+        hmMetricGroup.querySelectorAll('.scale-btn').forEach(b => b.classList.toggle('active', b.dataset.hmetric === heatmapMetric));
+        renderHeatmap();
       });
     }
 
@@ -2239,6 +2337,14 @@
         badgeEl.title = currentLang === 'ko' ? '생성 후 7일이 지나 데이터 갱신이 권장됩니다.' : 'More than 7 days since last update.';
       }
     }
+
+    const fxEl = document.getElementById('fx-rate-badge');
+    if (fxEl) {
+      fxEl.textContent = `$1 = ₩${Math.round(USD_KRW_RATE).toLocaleString('en-US')}`;
+      fxEl.title = (DATA.fx_rate && DATA.fx_rate.date)
+        ? `USD/KRW (${DATA.fx_rate.source || 'FX'}, ${DATA.fx_rate.date})`
+        : 'USD/KRW Reference Rate';
+    }
   }
 
   function applyLanguageDOM() {
@@ -2333,6 +2439,9 @@
         if (!resp.ok) throw new Error('Cannot load consensus data file.');
       }
       DATA = await resp.json();
+      if (DATA && DATA.fx_rate && DATA.fx_rate.USD_KRW > 800 && DATA.fx_rate.USD_KRW < 2500) {
+        USD_KRW_RATE = DATA.fx_rate.USD_KRW;
+      }
     } catch (err) {
       console.error(err);
       const loader = document.getElementById('loading-overlay');

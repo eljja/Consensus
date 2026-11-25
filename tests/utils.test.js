@@ -186,3 +186,12 @@ test('toUsdValue normalizes mixed US/KR prices to USD for fair screener sorting'
   assert.equal(utils.toUsdValue(null, 'KR', 1380), -Infinity);
 });
 
+test('computeAdjustedTarget and classifyDispersion behave accurately across bounds', () => {
+  assert.ok(Math.abs(utils.computeAdjustedTarget(120, 20) - 100) < 1e-9);
+  assert.equal(utils.computeAdjustedTarget(null, 20), null);
+  assert.equal(utils.classifyDispersion(11.2, 'ko').level, 'high');
+  assert.equal(utils.classifyDispersion(22.0, 'en').level, 'med');
+  assert.equal(utils.classifyDispersion(38.5, 'ko').level, 'low');
+});
+
+

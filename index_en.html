@@ -91,6 +91,7 @@
           <p class="brand-sub">
             <span id="generated-at">Data Generated: —</span>
             <span id="update-status-badge" class="update-status-badge"></span>
+            <span id="fx-rate-badge" class="fx-rate-badge num"></span>
           </p>
         </div>
       </div>
@@ -220,6 +221,8 @@
               <span class="meta-chip" id="hero-vol-badge" title="">σ —</span>
               <span class="meta-chip meta-chip-accent" id="hero-alpha-badge" title="">α —</span>
               <span class="meta-chip" id="hero-firms-badge">—</span>
+              <span class="meta-chip" id="hero-rev-badge">—</span>
+              <span class="meta-chip" id="hero-disp-badge">—</span>
             </div>
             <h2 class="hero-stock-name" id="hero-stock-name">—</h2>
           </div>
@@ -312,6 +315,7 @@
           <p class="card-value num val-cyan" id="val-prediction">—</p>
           <p class="card-sub" id="sub-prediction"></p>
           <p class="card-meta" id="meta-pred-model"></p>
+          <p class="card-meta num meta-ci-line" id="meta-pred-ci"></p>
         </div>
 
         <div class="summary-card" id="card-bias">
@@ -443,8 +447,9 @@
         </div>
 
         <div class="realistic-footer-note" id="realistic-footer-note">
-          * Calculated by taking the latest report per firm (within 90d) and adjusting each target price by historical 3-mo realized bias using Bayesian Shrinkage.
+          * Calculated from latest reports per firm using 2-year recency-weighted Bayesian shrinkage and the Hybrid v2 momentum model.
         </div>
+        <div class="model-proof-strip" id="model-proof-strip"></div>
       </div>
     </section>
 
@@ -530,6 +535,10 @@
           <p class="section-desc" data-i18n="heatmap_sub">Average brokerage bias per stock by market · Click any cell to jump to that stock</p>
         </div>
         <div class="chart-toolbar">
+          <div class="scale-toggle-group" id="heatmap-metric-toggles" role="group" aria-label="Heatmap Metric">
+            <button type="button" class="scale-btn active" data-hmetric="issuance" data-i18n="hm_metric_issuance">Issuance Bias</button>
+            <button type="button" class="scale-btn" data-hmetric="realized" data-i18n="hm_metric_realized">3M Realized Error</button>
+          </div>
           <div class="scale-toggle-group" id="heatmap-market-toggles" role="group" aria-label="Heatmap Market">
             <button type="button" class="scale-btn active" data-hmarket="US" data-i18n="tab_us">🇺🇸 US 21</button>
             <button type="button" class="scale-btn" data-hmarket="KR" data-i18n="tab_kr">🇰🇷 KR 21</button>
@@ -603,6 +612,7 @@
                 <th data-sort="analyst" class="sortable"><span data-i18n="th_analyst">Analyst</span> <span class="sort-icon">⇅</span></th>
                 <th data-sort="reportPrice" class="sortable num-col"><span data-i18n="th_date_price">Price on Date</span> <span class="sort-icon">⇅</span></th>
                 <th data-sort="target" class="sortable num-col"><span data-i18n="th_target">Target Price</span> <span class="sort-icon">⇅</span></th>
+                <th data-sort="adjTarget" class="sortable num-col"><span data-i18n="th_adj_target">Adj. Target</span> <span class="sort-icon">⇅</span></th>
                 <th data-sort="bias" class="sortable num-col"><span data-i18n="th_bias">Issuance Bias (%)</span> <span class="sort-icon">⇅</span></th>
                 <th data-i18n="th_category">Category</th>
               </tr>
@@ -661,6 +671,7 @@
               <th data-ssort="adj_mean" class="sortable num-col"><span data-i18n="scr_adj_mean">12M Adj. Mean</span> <span class="sort-icon">⇅</span></th>
               <th data-ssort="upside" class="sortable active-sort num-col"><span data-i18n="scr_upside">Adj. Upside</span> <span class="sort-icon">▼</span></th>
               <th data-ssort="pred_3m" class="sortable num-col"><span data-i18n="scr_pred_3m">3M Forecast</span> <span class="sort-icon">⇅</span></th>
+              <th data-ssort="rev_breadth" class="sortable num-col"><span data-i18n="scr_revision">Revisions (↑/↓)</span> <span class="sort-icon">⇅</span></th>
               <th data-ssort="volatility" class="sortable num-col"><span data-i18n="scr_vol">Volatility (σ)</span> <span class="sort-icon">⇅</span></th>
               <th data-ssort="alpha" class="sortable num-col">α <span class="sort-icon">⇅</span></th>
               <th data-ssort="firms" class="sortable num-col"><span data-i18n="scr_firms">Active Firms</span> <span class="sort-icon">⇅</span></th>

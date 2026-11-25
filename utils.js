@@ -248,21 +248,56 @@
 
   function buildReportsCsv(rows, headers) {
     const lines = [headers.map(escapeCsvCell).join(',')];
+    const hasAdj = headers.length >= 10;
     (rows || []).forEach(r => {
-      const cols = [
-        r.date,
-        r.stock,
-        r.ticker,
-        r.firm,
-        r.analyst,
-        r.reportPrice != null ? r.reportPrice : '',
-        r.target != null ? r.target : '',
-        r.bias != null ? r.bias.toFixed(1) + '%' : '',
-        r.category || '',
-      ];
+      const cols = hasAdj
+        ? [
+            r.date,
+            r.stock,
+            r.ticker,
+            r.firm,
+            r.analyst,
+            r.reportPrice != null ? r.reportPrice : '',
+            r.target != null ? r.target : '',
+            r.adjTarget != null ? Math.round(r.adjTarget * 100) / 100 : '',
+            r.bias != null ? r.bias.toFixed(1) + '%' : '',
+            r.category || '',
+          ]
+        : [
+            r.date,
+            r.stock,
+            r.ticker,
+            r.firm,
+            r.analyst,
+            r.reportPrice != null ? r.reportPrice : '',
+            r.target != null ? r.target : '',
+            r.bias != null ? r.bias.toFixed(1) + '%' : '',
+            r.category || '',
+          ];
       lines.push(cols.map(escapeCsvCell).join(','));
     });
     return lines.join('\r\n');
+  }
+
+  function computeAdjustedTarget(rawTarget, firmBiasPct) {
+    if (rawTarget == null || isNaN(rawTarget) || rawTarget <= 0) return null;
+    const bias = (firmBiasPct != null && !isNaN(firmBiasPct)) ? firmBiasPct : 15.0;
+    const denom = 1 + bias / 100;
+    if (denom <= 0.1) return null;
+    return rawTarget / denom;
+  }
+
+  function classifyDispersion(dispersionPct, lang = 'ko') {
+    if (dispersionPct == null || isNaN(dispersionPct)) {
+      return { level: 'med', label: lang === 'en' ? 'Moderate' : '보통', cls: 'chip-agree-med' };
+    }
+    if (dispersionPct < 15) {
+      return { level: 'high', label: lang === 'en' ? 'High' : '높음', cls: 'chip-agree-high' };
+    }
+    if (dispersionPct <= 30) {
+      return { level: 'med', label: lang === 'en' ? 'Moderate' : '보통', cls: 'chip-agree-med' };
+    }
+    return { level: 'low', label: lang === 'en' ? 'Wide Split' : '분산', cls: 'chip-agree-low' };
   }
 
   // Unified semantic color system:
@@ -324,6 +359,8 @@
     groupFirmScatterSeries,
     selectBiasRankingEntries,
     buildReportsCsv,
+    computeAdjustedTarget,
+    classifyDispersion,
     getSemanticTone,
   };
 });

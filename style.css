@@ -127,6 +127,11 @@ button,input,select,a{font-family:inherit}
 }
 .update-status-badge.status-fresh{background:var(--up-soft);color:var(--up);border:1px solid rgba(16,185,129,.32)}
 .update-status-badge.status-stale{background:var(--warning-soft);color:var(--warning);border:1px solid rgba(245,158,11,.32)}
+.fx-rate-badge{
+  display:inline-flex;align-items:center;padding:1px 8px;border-radius:99px;
+  font-size:.68rem;font-weight:600;color:var(--text-secondary);
+  background:rgba(255,255,255,.05);border:1px solid var(--glass-border);white-space:nowrap;
+}
 
 .top-bar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .quick-search-trigger{
@@ -204,7 +209,7 @@ button,input,select,a{font-family:inherit}
 
 /* ===== MAIN CONTENT ===== */
 .main-content{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:22px 28px 64px}
-.section{margin-bottom:24px}
+.section{margin-bottom:24px;scroll-margin-top:128px}
 
 .section-header{
   display:flex;align-items:flex-end;justify-content:space-between;
@@ -372,6 +377,19 @@ button,input,select,a{font-family:inherit}
   border:1px solid rgba(255,255,255,.08);font-variant-numeric:tabular-nums;
 }
 .meta-chip-accent{background:var(--cyan-soft);color:var(--cyan);border-color:rgba(34,211,238,.28)}
+.meta-chip-up{background:var(--up-soft);color:var(--up);border-color:rgba(16,185,129,.32)}
+.meta-chip-down{background:var(--down-soft);color:var(--down);border-color:rgba(244,63,94,.32)}
+.chip-agree-high{background:var(--up-soft);color:var(--up);border-color:rgba(16,185,129,.28)}
+.chip-agree-med{background:rgba(148,163,184,.12);color:var(--text-secondary);border-color:rgba(148,163,184,.25)}
+.chip-agree-low{background:var(--warning-soft);color:var(--warning);border-color:rgba(245,158,11,.3)}
+.meta-ci-line{color:var(--text-secondary);font-weight:600;margin-top:3px}
+.model-proof-strip{
+  margin-top:10px;padding:8px 12px;border-radius:var(--radius-sm);
+  background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.22);
+  color:#c7d2fe;font-size:.73rem;font-weight:600;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+}
+.model-proof-strip strong{color:var(--up)}
 .hero-stock-name{font-size:1.68rem;font-weight:800;letter-spacing:-.025em;line-height:1.15}
 
 /* Price Target Range Gauge */

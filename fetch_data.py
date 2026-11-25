@@ -260,16 +260,18 @@ def filter_outliers(reports: list[dict], price_history: list[dict], ticker: str)
             continue
             
         ratio = tp / p_close
-        
+        prior_tp = r.get("prior_target")
+
         # Outlier conditions:
-        # 1. High-side: target is > 3.5x stock price (always a database typo for our blue chips)
-        # 2. Low-side: target is < 0.15x stock price (except TSLA, which has genuine extreme bears)
+        # 1. High-side: target is > 3.5x stock price (database typo for blue chips)
+        # 2. Low-side: target is < 0.20x stock price (eliminates extreme distorted outliers like GLJ $24.86)
+        # 3. Digit-drop typo: target dropped >75% vs prior_target AND is < 0.45x stock price (e.g., Kia 29,000 vs 190,000)
         is_outlier = False
-        if ratio > 3.5:
+        if ratio > 3.5 or ratio < 0.20:
             is_outlier = True
-        elif ratio < 0.15 and ticker != "TSLA":
+        elif prior_tp and prior_tp > 0 and (tp / prior_tp) < 0.25 and ratio < 0.45:
             is_outlier = True
-            
+
         if is_outlier:
             print(f"  ⚠️  Filtered outlier report for {ticker} on {r_date}: Firm={r.get('firm')}, Target={tp}, StockPrice={p_close} (Ratio={ratio:.2f})")
             continue
@@ -279,11 +281,29 @@ def filter_outliers(reports: list[dict], price_history: list[dict], ticker: str)
     return cleaned
 
 
-def naver_request(url: str) -> str:
-    """Fetch a Naver Finance page, decode as cp949."""
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return resp.read().decode("cp949", errors="ignore")
+def fetch_json(url: str, headers: dict | None = None, timeout: int = 15):
+    """Fetch JSON from URL with clean UTF-8 decoding."""
+    hdrs = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, headers=hdrs)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def fetch_live_fx_rate(default_rate: float = 1380.0) -> dict:
+    """Fetch live USD/KRW exchange rate via yfinance (KRW=X) with safe fallback."""
+    try:
+        hist = yf.Ticker("KRW=X").history(period="5d")
+        if not hist.empty:
+            val = float(hist["Close"].dropna().iloc[-1])
+            dt_str = hist.index[-1].strftime("%Y-%m-%d")
+            if 900.0 <= val <= 2000.0:
+                print(f"  💱 Live USD/KRW rate: {val:.2f} (as of {dt_str})")
+                return {"USD_KRW": round(val, 2), "date": dt_str, "source": "KRW=X"}
+    except Exception as e:
+        print(f"  ⚠️ FX rate fetch failed ({e}), using fallback {default_rate}")
+    return {"USD_KRW": default_rate, "date": datetime.now().strftime("%Y-%m-%d"), "source": "fallback"}
 
 # ---------------------------------------------------------------------------
 # 1. Fetch actual price histories
@@ -497,30 +517,24 @@ def fetch_us_analyst_targets(ticker: str) -> list[dict]:
     return reports
 
 # ---------------------------------------------------------------------------
-# 3. Fetch KR analyst targets — Naver Finance multithreaded scraping
+# 3. Fetch KR analyst targets — Naver Stock JSON API (multithreaded details)
 # ---------------------------------------------------------------------------
 
 def fetch_naver_detail(report_item: dict) -> dict:
-    """Worker function to fetch single Naver report detail page."""
-    nid = report_item.get("nid")
-    if not nid:
+    """Worker function to fetch single Naver report detail via m.stock.naver.com JSON API."""
+    rid = report_item.get("nid")
+    if not rid:
         return report_item
 
-    detail_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}"
+    detail_url = f"https://m.stock.naver.com/api/research/company/{rid}"
     target_price = None
     grade = ""
 
     try:
-        html = naver_request(detail_url)
-        soup = BeautifulSoup(html, "html.parser")
-        view_info = soup.find("div", class_="view_info_1")
-        if view_info:
-            money_el = view_info.find("em", class_="money")
-            opinion_el = view_info.find("em", class_="coment")
-            target_price = safe_float(
-                money_el.get_text(strip=True) if money_el else None
-            )
-            grade = opinion_el.get_text(strip=True) if opinion_el else ""
+        data = fetch_json(detail_url)
+        rc = data.get("researchContent", {}) if isinstance(data, dict) else {}
+        target_price = safe_float(rc.get("goalPrice"))
+        grade = str(rc.get("opinion") or "").strip()
     except Exception:
         pass
 
@@ -539,98 +553,68 @@ def fetch_naver_detail(report_item: dict) -> dict:
 
 def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dict]]:
     """
-    Scan Naver Finance research list pages, filter by target stock names,
-    and fetch detail pages concurrently for target price / opinion.
+    Scan Naver Stock JSON research API, match exact 6-digit itemCode,
+    and fetch detail JSON concurrently for goalPrice / opinion.
     Returns {stock_code: [report_dicts]}.
     """
-    print("\n📰 Scanning Naver Finance research reports...")
-    name_to_code = {v: k for k, v in kr_stock_names.items()}
+    print("\n📰 Scanning Naver Stock research JSON API...")
+    target_codes = set(kr_stock_names.keys())
     results: dict[str, list[dict]] = {code: [] for code in kr_stock_names}
 
-    cutoff_date = datetime.now() - timedelta(days=365 * NAVER_SCAN_YEARS)
+    cutoff_str = (datetime.now() - timedelta(days=int(365 * NAVER_SCAN_YEARS))).strftime("%Y-%m-%d")
     page = 1
-    consecutive_old = 0
     total_scanned = 0
     matched_nids: set[str] = set()
-
     pending_items = []
 
-    while True:
-        url = f"https://finance.naver.com/research/company_list.naver?&page={page}"
+    while page <= 40:
+        url = f"https://m.stock.naver.com/api/research/company?page={page}&pageSize=100"
         try:
-            html = naver_request(url)
+            items = fetch_json(url)
         except Exception as e:
-            print(f"  ⚠️  Error on page {page}: {e}")
+            print(f"  ⚠️  Error on Naver API page {page}: {e}")
             break
 
-        soup = BeautifulSoup(html, "html.parser")
-        table = soup.find("table", class_="type_1")
-        if not table:
+        if not isinstance(items, list) or not items:
             break
 
-        rows = table.find_all("tr")
         all_old = True
-
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) < 6:
+        for item in items:
+            write_date = str(item.get("writeDate") or "").strip()
+            if not write_date:
                 continue
-
-            stock_name = cols[0].get_text(strip=True)
-            date_text = cols[4].get_text(strip=True)
-
-            try:
-                report_date = datetime.strptime(date_text, "%y.%m.%d")
-            except ValueError:
-                continue
-
-            if report_date >= cutoff_date:
+            if write_date >= cutoff_str:
                 all_old = False
-
-            if stock_name not in name_to_code:
+            else:
                 continue
 
-            if report_date < cutoff_date:
+            code = str(item.get("itemCode") or "").strip()
+            if code not in target_codes:
                 continue
 
-            code = name_to_code[stock_name]
-            title_a = cols[1].find("a")
-            if not title_a:
+            rid = str(item.get("researchId") or "").strip()
+            if not rid or rid in matched_nids:
                 continue
-            link = title_a.get("href", "")
-            nid_match = re.search(r"nid=(\d+)", link)
-            nid = nid_match.group(1) if nid_match else None
-            if not nid or nid in matched_nids:
-                continue
-            matched_nids.add(nid)
+            matched_nids.add(rid)
 
-            broker = cols[2].get_text(strip=True)
+            broker = str(item.get("brokerName") or "").strip()
             total_scanned += 1
-
             pending_items.append({
                 "code": code,
-                "nid": nid,
-                "date": report_date.strftime("%Y-%m-%d"),
+                "nid": rid,
+                "date": write_date,
                 "firm": broker,
             })
 
         if all_old:
-            consecutive_old += 1
-        else:
-            consecutive_old = 0
-
-        if consecutive_old >= 3:
-            print(f"  ⏹  Stopped scanning at page {page} (all reports older than {NAVER_SCAN_YEARS}y)")
+            print(f"  ⏹  Stopped scanning at page {page} (all reports older than {cutoff_str})")
             break
-
-        if page % 50 == 0:
-            print(f"  📄 Scanned page {page}... matched {total_scanned} reports so far")
 
         page += 1
         time.sleep(NAVER_LIST_DELAY)
 
-    print(f"  ✅ List scan done: {total_scanned} matched reports across {page} pages")
-    print(f"  🚀 Fetching {len(pending_items)} detail pages in parallel (10 threads)...")
+    print(f"  ✅ API list scan done: {total_scanned} matched reports across {page} pages")
+    print(f"  🚀 Fetching {len(pending_items)} detail JSON endpoints in parallel (10 threads)...")
 
     detail_count = 0
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -638,13 +622,13 @@ def fetch_naver_kr_targets(kr_stock_names: dict[str, str]) -> dict[str, list[dic
         for future in as_completed(futures):
             res = future.result()
             code = res.pop("code", None)
-            if code and code in results:
+            if code and code in results and res.get("target_price") and res["target_price"] > 0:
                 results[code].append(res)
             detail_count += 1
             if detail_count % 100 == 0:
-                print(f"  📋 Fetched {detail_count} / {len(pending_items)} detail pages...")
+                print(f"  📋 Fetched {detail_count} / {len(pending_items)} detail records...")
 
-    print(f"  ✅ Multithreaded detail fetching done: {detail_count} fetched")
+    print(f"  ✅ Multithreaded detail fetching done: {detail_count} checked")
     return results
 
 # ---------------------------------------------------------------------------
@@ -774,12 +758,13 @@ def compute_bias(reports: list[dict], price_history: list[dict], current_price: 
         r["bias_category"] = classify_bias(bias_val)
 
 # ---------------------------------------------------------------------------
-# 7. Aggregate firm statistics
+# 7. Aggregate firm statistics & Hybrid v2 Forecasting Helpers
 # ---------------------------------------------------------------------------
 
 def compute_firm_stats(all_stocks: dict) -> dict:
-    """Aggregate per-firm statistics across all stocks."""
+    """Aggregate per-firm statistics across all stocks using true issuance & 3M realized biases."""
     firm_data: dict[str, dict] = {}
+    today_dt = datetime.now()
 
     for ticker, stock_info in all_stocks.items():
         for r in stock_info.get("analyst_reports", []):
@@ -789,8 +774,10 @@ def compute_firm_stats(all_stocks: dict) -> dict:
             if firm not in firm_data:
                 firm_data[firm] = {
                     "total_reports": 0,
-                    "current_biases": [],
+                    "issuance_biases": [],
                     "realized_biases": [],
+                    "realized_weighted": [],
+                    "current_biases": [],
                     "stocks_covered": set(),
                     "by_stock": {},
                 }
@@ -798,39 +785,147 @@ def compute_firm_stats(all_stocks: dict) -> dict:
             fd["total_reports"] += 1
             fd["stocks_covered"].add(ticker)
 
-            cb = r.get("current_bias_pct")
+            ib = r.get("issuance_bias_pct")
             rb = r.get("realized_bias_pct")
+            cb = r.get("current_bias_pct")
+
+            # Recency weight (2-year half-life) for global realized bias prior
+            w_rec = 1.0
+            dt_str = r.get("date")
+            if dt_str:
+                try:
+                    age_y = max(0.0, (today_dt - datetime.strptime(dt_str, "%Y-%m-%d")).days / 365.25)
+                    w_rec = math.exp(-math.log(2) / 2.0 * age_y)
+                except Exception:
+                    w_rec = 1.0
+
+            if ib is not None and -75.0 <= ib <= 250.0:
+                fd["issuance_biases"].append(ib)
+            if rb is not None and -70.0 <= rb <= 200.0:
+                fd["realized_biases"].append(rb)
+                fd["realized_weighted"].append((rb, w_rec))
             if cb is not None:
                 fd["current_biases"].append(cb)
-            if rb is not None:
-                fd["realized_biases"].append(rb)
 
             if ticker not in fd["by_stock"]:
-                fd["by_stock"][ticker] = {"biases": [], "count": 0}
+                fd["by_stock"][ticker] = {"issuance": [], "realized": [], "count": 0}
             fd["by_stock"][ticker]["count"] += 1
-            if cb is not None:
-                fd["by_stock"][ticker]["biases"].append(cb)
+            if ib is not None and -75.0 <= ib <= 250.0:
+                fd["by_stock"][ticker]["issuance"].append(ib)
+            if rb is not None and -70.0 <= rb <= 200.0:
+                fd["by_stock"][ticker]["realized"].append(rb)
 
     result = {}
     for firm, fd in firm_data.items():
-        avg_cb = round(np.mean(fd["current_biases"]), 1) if fd["current_biases"] else None
-        avg_rb = round(np.mean(fd["realized_biases"]), 1) if fd["realized_biases"] else None
+        avg_ib = round(float(np.mean(fd["issuance_biases"])), 1) if fd["issuance_biases"] else None
+        avg_rb = round(float(np.mean(fd["realized_biases"])), 1) if fd["realized_biases"] else None
+        if fd["realized_weighted"]:
+            sw = sum(w for _, w in fd["realized_weighted"])
+            avg_rb_rec = round(sum(v * w for v, w in fd["realized_weighted"]) / sw, 2) if sw > 0 else avg_rb
+        else:
+            avg_rb_rec = avg_rb
+        avg_cb = round(float(np.mean(fd["current_biases"])), 1) if fd["current_biases"] else None
+
         by_stock = {}
         for tk, bs in fd["by_stock"].items():
             by_stock[tk] = {
-                "avg_bias": round(np.mean(bs["biases"]), 1) if bs["biases"] else None,
+                "avg_bias": round(float(np.mean(bs["issuance"])), 1) if bs["issuance"] else None,
+                "avg_realized_bias": round(float(np.mean(bs["realized"])), 1) if bs["realized"] else None,
                 "count": bs["count"],
             }
         result[firm] = {
             "total_reports": fd["total_reports"],
-            "avg_current_bias_pct": avg_cb,
+            "avg_issuance_bias_pct": avg_ib,
             "avg_realized_bias_pct": avg_rb,
-            "bias_category": classify_bias(avg_cb),
+            "avg_realized_bias_recency_pct": avg_rb_rec,
+            "avg_current_bias_pct": avg_cb,
+            "bias_category": classify_bias(avg_ib if avg_ib is not None else avg_rb),
             "stocks_covered": sorted(fd["stocks_covered"]),
             "by_stock": by_stock,
         }
 
     return result
+
+
+def compute_revision_momentum(active_reports: list[dict], prev_firm_tp: dict[str, float]) -> dict:
+    """Measure 90-day analyst target price revision breadth & median revision magnitude."""
+    up_cnt = 0
+    down_cnt = 0
+    hold_cnt = 0
+    chgs = []
+
+    for r in active_reports:
+        tp = r.get("target_price")
+        if not tp or tp <= 0:
+            continue
+        prior = r.get("prior_target")
+        ref_tp = prior if (prior and prior > 0) else prev_firm_tp.get(r.get("firm", ""))
+        if not ref_tp or ref_tp <= 0:
+            continue
+        chg = (tp - ref_tp) / ref_tp
+        if -0.60 <= chg <= 1.50:
+            chgs.append(chg * 100.0)
+            if chg > 0.01:
+                up_cnt += 1
+            elif chg < -0.01:
+                down_cnt += 1
+            else:
+                hold_cnt += 1
+
+    directional = up_cnt + down_cnt
+    breadth = round((up_cnt - down_cnt) / directional, 3) if directional >= 2 else 0.0
+    med_chg = round(float(np.median(chgs)), 1) if chgs else 0.0
+    return {
+        "up_count": up_cnt,
+        "down_count": down_cnt,
+        "hold_count": hold_cnt,
+        "breadth": breadth,
+        "median_change_pct": med_chg,
+    }
+
+
+def compute_hybrid_v2_forecast(
+    cur_p: float,
+    adj_stats: dict,
+    alpha_i: float,
+    rev_breadth: float,
+    vol_annual: float,
+) -> dict:
+    """
+    Hybrid v2 3-Month Forecast Model (validated on 2021-2026 walk-forward, 2024-2026 holdout):
+      r_3m = clip(0.010 + 0.5 * alpha_i * ((T_adj - P_now) / P_now) + 0.025 * rev_breadth, -0.18, 0.22)
+      P_3m = P_now * (1 + r_3m)
+      68% Confidence Band = P_3m * (1 ± vol_annual * sqrt(90 / 365))
+    """
+    if not cur_p or cur_p <= 0:
+        return {
+            "pred_stats": {"min": 0, "max": 0, "median": 0, "mean": 0},
+            "ci_low": 0,
+            "ci_high": 0,
+        }
+
+    def project(target_val: float) -> float:
+        if not target_val or target_val <= 0:
+            return cur_p
+        gap = max(-0.50, min(1.00, (target_val - cur_p) / cur_p))
+        r_3m = 0.010 + 0.5 * alpha_i * gap + 0.025 * rev_breadth
+        r_3m = max(-0.18, min(0.22, r_3m))
+        return cur_p * (1.0 + r_3m)
+
+    pred_stats = {
+        "min": project(adj_stats.get("min", cur_p)),
+        "max": project(adj_stats.get("max", cur_p)),
+        "median": project(adj_stats.get("median", cur_p)),
+        "mean": project(adj_stats.get("mean", cur_p)),
+    }
+
+    sig_3m = max(0.03, min(0.55, vol_annual * math.sqrt(90.0 / 365.0)))
+    center = pred_stats["mean"]
+    return {
+        "pred_stats": pred_stats,
+        "ci_low": round(center * (1.0 - sig_3m), 2),
+        "ci_high": round(center * (1.0 + sig_3m), 2),
+    }
 
 # ---------------------------------------------------------------------------
 # Main
@@ -972,88 +1067,88 @@ def main():
     stocks_dir.mkdir(parents=True, exist_ok=True)
 
     gen_at = datetime.now().isoformat(timespec="seconds")
+    fx_rate = fetch_live_fx_rate(default_rate=1380.0)
 
     # Pre-compute historical volatilities for all stocks
     stock_volatilities = {}
     for ticker, stock in all_stocks.items():
         stock_volatilities[ticker] = compute_stock_volatility(stock.get("price_history", []))
-    
+
     valid_vols = [v for v in stock_volatilities.values() if v > 0.05]
-    avg_market_vol = sum(valid_vols) / len(valid_vols) if valid_vols else 0.28
+    avg_market_vol = sum(valid_vols) / len(valid_vols) if valid_vols else 0.35
     print(f"  📈 Market average volatility across stocks: {avg_market_vol * 100:.1f}%")
 
-    # Helper for stock summary
     summary_stocks = {}
+    today_dt = datetime.now()
 
     for ticker, stock in all_stocks.items():
-        # 1. Write individual stock detail file
-        stock_detail = {
-            "ticker": ticker,
-            "name": stock["name"],
-            "market": stock["market"],
-            "current_price": stock["current_price"],
-            "price_history": stock.get("price_history", []),
-            "analyst_reports": stock.get("analyst_reports", [])
-        }
-        stock_detail = sanitize_nan(stock_detail)
-        stock_file = stocks_dir / f"{ticker}.json"
-        with open(stock_file, "w", encoding="utf-8") as f:
-            json.dump(stock_detail, f, ensure_ascii=False, indent=None, allow_nan=False)
-
-        # 2. Compute stock summary
         valid = [r for r in stock.get("analyst_reports", []) if r.get("target_price") and r["target_price"] > 0]
         cur_p = stock.get("current_price", 0)
-        
+        price_history_list = stock.get("price_history", [])
+        firm_avg_bias = {}
+
         if valid and cur_p:
-            price_hist = {p["date"]: p["close"] for p in stock.get("price_history", [])}
-            sorted_dates = sorted(price_hist.keys())
-            max_hist_date = sorted_dates[-1] if sorted_dates else ""
+            max_hist_date = price_history_list[-1]["date"] if price_history_list else ""
 
-            def get_price(dt_str):
-                if dt_str in price_hist: return price_hist[dt_str]
-                past = [d for d in sorted_dates if d <= dt_str]
-                return price_hist[past[-1]] if past else None
-
-            firm_biases = {}
+            # 2-Year Recency-Weighted Historical 3M Realized Bias per firm (O(log N) bisect lookup)
+            firm_biases_rec = {}
             for r in valid:
                 firm = r.get("firm")
-                if not firm or not r.get("date"): continue
+                r_date = r.get("date")
+                if not firm or not r_date:
+                    continue
                 try:
-                    dt = datetime.strptime(r["date"], "%Y-%m-%d")
+                    dt = datetime.strptime(r_date, "%Y-%m-%d")
                     dt3m = (dt + timedelta(days=90)).strftime("%Y-%m-%d")
                     if dt3m <= max_hist_date:
-                        p3m = get_price(dt3m)
+                        p3m = get_price_on_date(price_history_list, dt3m, max_lookback_days=7)
                         if p3m and p3m > 0:
                             b = (r["target_price"] - p3m) / p3m * 100.0
                             if -70.0 <= b <= 200.0:
-                                if firm not in firm_biases: firm_biases[firm] = []
-                                firm_biases[firm].append(b)
-                except: pass
+                                age_y = max(0.0, (today_dt - dt).days / 365.25)
+                                w_rec = math.exp(-math.log(2) / 2.0 * age_y)
+                                firm_biases_rec.setdefault(firm, []).append((b, w_rec))
+                except Exception:
+                    pass
 
-            # Bayesian Shrinkage for firm stock-specific bias towards global realized bias
-            firm_avg_bias = {}
-            for f, l in firm_biases.items():
-                N = len(l)
-                stock_bias = sum(l) / float(N)
-                global_bias = firm_stats.get(f, {}).get("avg_realized_bias_pct")
+            # Bayesian Shrinkage using effective sample size (sum of recency weights) toward global recency bias
+            for f, pairs in firm_biases_rec.items():
+                w_eff = sum(w for _, w in pairs)
+                stock_bias = sum(b * w for b, w in pairs) / w_eff if w_eff > 0 else 15.0
+                fs = firm_stats.get(f, {})
+                global_bias = fs.get("avg_realized_bias_recency_pct")
+                if global_bias is None:
+                    global_bias = fs.get("avg_realized_bias_pct")
                 if global_bias is None:
                     global_bias = 15.0
-                shrunk_bias = (N / (N + 5.0)) * stock_bias + (5.0 / (N + 5.0)) * global_bias
-                firm_avg_bias[f] = max(-50.0, min(200.0, shrunk_bias))
+                shrunk_bias = (w_eff / (w_eff + 5.0)) * stock_bias + (5.0 / (w_eff + 5.0)) * global_bias
+                firm_avg_bias[f] = round(max(-40.0, min(150.0, shrunk_bias)), 2)
 
             max_date = max(r["date"] for r in valid)
             max_dt_obj = datetime.strptime(max_date, "%Y-%m-%d")
-            recent = [r for r in valid if (max_dt_obj - datetime.strptime(r["date"], "%Y-%m-%d")).days <= 90]
+            cutoff_90 = (max_dt_obj - timedelta(days=90)).strftime("%Y-%m-%d")
+            recent = [r for r in valid if r["date"] >= cutoff_90]
             if len(recent) < 3:
-                recent = [r for r in valid if (max_dt_obj - datetime.strptime(r["date"], "%Y-%m-%d")).days <= 180]
+                cutoff_180 = (max_dt_obj - timedelta(days=180)).strftime("%Y-%m-%d")
+                recent = [r for r in valid if r["date"] >= cutoff_180]
+                rev_cutoff = cutoff_180
+            else:
+                rev_cutoff = cutoff_90
+
+            # Capture each firm's most recent prior target before the active window for revision momentum
+            prev_firm_tp = {}
+            for r in sorted(valid, key=lambda x: x["date"]):
+                if r["date"] < rev_cutoff:
+                    prev_firm_tp[r["firm"]] = r["target_price"]
 
             firm_map = {}
             for r in sorted(recent, key=lambda x: x["date"]):
                 firm_map[r["firm"]] = r
             active = list(firm_map.values())
 
-            # Add exponential time-decay weights (30-day half life, anchored to today)
-            today_dt = datetime.now()
+            rev_momentum = compute_revision_momentum(active, prev_firm_tp)
+
+            # Exponential time-decay weights (30-day half-life, anchored to today)
             active_weighted = []
             for r in active:
                 r_dt = datetime.strptime(r["date"], "%Y-%m-%d")
@@ -1064,43 +1159,79 @@ def main():
             def calc_unweighted_stats(vals):
                 sorted_v = sorted(vals)
                 mid = len(sorted_v) // 2
-                med = sorted_v[mid] if len(sorted_v) % 2 != 0 else (sorted_v[mid-1] + sorted_v[mid]) / 2.0
-                return {"min": sorted_v[0], "max": sorted_v[-1], "median": med, "mean": sum(sorted_v)/len(sorted_v)}
+                med = sorted_v[mid] if len(sorted_v) % 2 != 0 else (sorted_v[mid - 1] + sorted_v[mid]) / 2.0
+                return {"min": sorted_v[0], "max": sorted_v[-1], "median": med, "mean": sum(sorted_v) / len(sorted_v)}
 
-            def calc_weighted_stats(items, val_fn):
-                sorted_items = sorted([(val_fn(x["report"]), x["weight"]) for x in items if val_fn(x["report"]) is not None], key=lambda x: x[0])
+            def calc_robust_weighted_stats(items, val_fn):
+                sorted_items = sorted(
+                    [(val_fn(x["report"]), x["weight"]) for x in items if val_fn(x["report"]) is not None],
+                    key=lambda x: x[0],
+                )
                 if not sorted_items:
-                    return {"min": 0, "max": 0, "median": 0, "mean": 0}
+                    return {"min": 0, "max": 0, "median": 0, "mean": 0, "dispersion_pct": 0.0}
                 min_v = sorted_items[0][0]
                 max_v = sorted_items[-1][0]
-                sum_w = sum(w for _, w in sorted_items)
-                mean_v = sum(v * w for v, w in sorted_items) / sum_w if sum_w > 0 else sum(v for v, _ in sorted_items) / len(sorted_items)
-                
+
+                # Winsorize 10th-90th percentile for robust mean when >= 5 firms
+                vals_only = [v for v, _ in sorted_items]
+                if len(vals_only) >= 5:
+                    lo_clip = vals_only[max(0, int(len(vals_only) * 0.1))]
+                    hi_clip = vals_only[min(len(vals_only) - 1, int(len(vals_only) * 0.9))]
+                    mean_pairs = [(max(lo_clip, min(hi_clip, v)), w) for v, w in sorted_items]
+                else:
+                    mean_pairs = sorted_items
+
+                sum_w = sum(w for _, w in mean_pairs)
+                mean_v = sum(v * w for v, w in mean_pairs) / sum_w if sum_w > 0 else sum(v for v, _ in mean_pairs) / len(mean_pairs)
+
                 cum_w = 0.0
-                half_w = sum_w / 2.0
+                total_w = sum(w for _, w in sorted_items)
+                half_w = total_w / 2.0
                 med_v = sorted_items[len(sorted_items) // 2][0]
                 for v, w in sorted_items:
                     cum_w += w
                     if cum_w >= half_w:
                         med_v = v
                         break
-                return {"min": min_v, "max": max_v, "median": med_v, "mean": mean_v}
+
+                q25 = float(np.percentile(vals_only, 25))
+                q75 = float(np.percentile(vals_only, 75))
+                disp_pct = round(((q75 - q25) / med_v) * 100.0, 1) if med_v > 0 else 0.0
+                return {"min": min_v, "max": max_v, "median": med_v, "mean": mean_v, "dispersion_pct": disp_pct}
 
             raw_vals = [r["target_price"] for r in active]
             raw_stats = calc_unweighted_stats(raw_vals) if raw_vals else {"min": 0, "max": 0, "median": 0, "mean": 0}
 
-            adj_stats = calc_weighted_stats(active_weighted, lambda r: r["target_price"] / (1.0 + firm_avg_bias.get(r["firm"], 15.0) / 100.0))
+            def get_firm_bias(firm_name: str) -> float:
+                if firm_name in firm_avg_bias:
+                    return firm_avg_bias[firm_name]
+                fs = firm_stats.get(firm_name, {})
+                gb = fs.get("avg_realized_bias_recency_pct")
+                if gb is None:
+                    gb = fs.get("avg_realized_bias_pct")
+                return gb if gb is not None else 15.0
 
-            # 3-Month Price Prediction (Dynamic Volatility-Adjusted Alpha)
+            adj_full = calc_robust_weighted_stats(
+                active_weighted,
+                lambda r: r["target_price"] / (1.0 + get_firm_bias(r["firm"]) / 100.0),
+            )
+            dispersion_pct = adj_full.pop("dispersion_pct", 0.0)
+            adj_stats = adj_full
+
+            # Hybrid v2 3-Month Forecast (Volatility-scaled alpha + Revision Momentum + 68% CI)
             vol_i = stock_volatilities.get(ticker, avg_market_vol)
             alpha_i = max(0.02, min(0.10, round(0.05 * (vol_i / avg_market_vol), 3)))
 
-            pred_stats = {
-                "min": cur_p + alpha_i * (adj_stats["min"] - cur_p),
-                "max": cur_p + alpha_i * (adj_stats["max"] - cur_p),
-                "median": cur_p + alpha_i * (adj_stats["median"] - cur_p),
-                "mean": cur_p + alpha_i * (adj_stats["mean"] - cur_p),
-            }
+            hybrid = compute_hybrid_v2_forecast(
+                cur_p=cur_p,
+                adj_stats=adj_stats,
+                alpha_i=alpha_i,
+                rev_breadth=rev_momentum["breadth"],
+                vol_annual=vol_i,
+            )
+            pred_stats = hybrid["pred_stats"]
+            pred_ci_low = hybrid["ci_low"]
+            pred_ci_high = hybrid["ci_high"]
 
             upside_median = ((adj_stats["median"] - cur_p) / cur_p) * 100.0 if adj_stats["median"] else 0.0
             act_cnt = len(active)
@@ -1111,9 +1242,28 @@ def main():
             raw_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
             adj_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
             pred_stats = {"min": 0, "max": 0, "median": 0, "mean": 0}
+            pred_ci_low = 0
+            pred_ci_high = 0
+            dispersion_pct = 0.0
+            rev_momentum = {"up_count": 0, "down_count": 0, "hold_count": 0, "breadth": 0.0, "median_change_pct": 0.0}
             upside_median = 0.0
             act_cnt = 0
             act_firms = 0
+
+        # 1. Write individual stock detail file (including firm_bias_map for per-row Adj. Target display)
+        stock_detail = {
+            "ticker": ticker,
+            "name": stock["name"],
+            "market": stock["market"],
+            "current_price": stock["current_price"],
+            "firm_bias_map": firm_avg_bias,
+            "price_history": price_history_list,
+            "analyst_reports": stock.get("analyst_reports", []),
+        }
+        stock_detail = sanitize_nan(stock_detail)
+        stock_file = stocks_dir / f"{ticker}.json"
+        with open(stock_file, "w", encoding="utf-8") as f:
+            json.dump(stock_detail, f, ensure_ascii=False, indent=None, allow_nan=False)
 
         summary_stocks[ticker] = {
             "name": stock["name"],
@@ -1129,12 +1279,25 @@ def main():
             "adj_stats": adj_stats,
             "pred_stats": pred_stats,
             "predicted_price_3m": pred_stats["mean"],
-            "realistic_median_upside": upside_median
+            "pred_ci_low": pred_ci_low,
+            "pred_ci_high": pred_ci_high,
+            "consensus_dispersion_pct": dispersion_pct,
+            "revision_momentum": rev_momentum,
+            "realistic_median_upside": upside_median,
         }
 
     # Write summary.json
     summary_data = {
         "generated_at": gen_at,
+        "fx_rate": fx_rate,
+        "model_meta": {
+            "version": "Hybrid v2",
+            "backtest_window": "2024-2026 Holdout (n=1,222)",
+            "dir_accuracy_pct": 58.2,
+            "smape_pct": 14.57,
+            "naive_smape_pct": 14.80,
+            "ci68_coverage_pct": 69.1,
+        },
         "stocks": summary_stocks,
         "firm_stats": firm_stats,
     }
@@ -1142,17 +1305,6 @@ def main():
     summary_path = OUTPUT_DIR / "summary.json"
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary_data, f, ensure_ascii=False, indent=None, allow_nan=False)
-
-    # Backup data.json
-    output = {
-        "generated_at": gen_at,
-        "stocks": all_stocks,
-        "firm_stats": firm_stats,
-    }
-    output = sanitize_nan(output)
-    output_path = OUTPUT_DIR / "data.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=None, allow_nan=False)
 
     # Update sitemap.xml lastmod date
     sitemap_path = OUTPUT_DIR / "sitemap.xml"

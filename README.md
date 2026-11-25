@@ -33,10 +33,10 @@ A premium interactive dashboard that collects, cleans, and analyzes analyst targ
 ## 1. 프로젝트 소개 및 특징
 본 프로젝트는 국내외 42대 대표 기업(미국 빅테크 21개 + 한국 시총 상위 21개)에 대하여 발표된 증권사 리포트 데이터를 분석합니다. 증권사의 지나치게 낙관적인 예측 관행(Bullish Bias)을 객관적인 데이터로 검증하고 보정하는 것을 목적으로 합니다.
 
-- **글래스모피즘 디자인**: 유려한 다크 모드 테마와 부드러운 차트 모션 제공.
-- **다국어 및 다통화 지원**: 한국어/영어 전환 및 USD/KRW 실시간 환산(고정 환율 $1 = ₩1,380$) 기능 지원.
-- **비동기 지연 로딩(Lazy Loading)**: 메인 페이지 로딩 속도를 높이기 위해 9MB 크기의 원본 데이터를 경량 메타데이터(`summary.json`)와 개별 종목 JSON 파일(`stocks/*.json`)로 분리하고, 사용자 상호작용 시점에만 동적으로 패치하여 빠른 초기 로딩 속도를 달성하였습니다.
-- **시가총액 기반 정렬**: 미국 및 한국 종목 버튼(Pill)을 각 시장의 최신 시가총액 순서대로 정렬하여 직관적인 탐색 환경을 제공합니다.
+- **글래스모피즘 디자인 & 통합 시맨틱 컬러**: 다크 모드 기관급 금융 터미널 UI(상승여력: 에메랄드, 하방위험: 로즈) 및 `tabular-nums` 숫자 정렬.
+- **다국어 및 실시간 환율 지원**: 한국어/영어 전환(종목 딥링크 `?ticker=` 보존) 및 `yfinance(KRW=X)` 실시간 USD/KRW 환율 자동 연동.
+- **종목 탐색 허브 & 42종목 스크리너**: 마켓 펄스(상·하위 기회), 42종목 비교 스크리너 모달(혼합 통화 USD 정규화 정렬), 커맨드 팔레트(`/` 또는 `Ctrl+K`) 지원.
+- **비동기 지연 로딩(Lazy Loading)**: 경량 메타데이터(`summary.json`)와 개별 종목 JSON(`stocks/*.json`) 분리로 빠른 초기 로딩 달성.
 - **구글 SEO 최적화**: Google Search Console 인증, Schema.org JSON-LD 구조화 데이터, 다국어 Hreflang 태그, Open Graph 및 Twitter Cards 지원.
 
 ---
@@ -53,16 +53,17 @@ $$\text{발표 당시 괴리율 (\%)} = \frac{\text{목표가 (Target Price)} - 
 각 증권사별로 발표한 리포트의 **3개월 실현 괴리율(3-Month Realized Bias)**을 기반으로 증권사별 고유 편향 지수(Bias Index)를 산출하고, 이를 바탕으로 생(Raw) 목표가를 합리적으로 보정합니다.
 $$\text{보정 목표가 } (T_{adj}) = \frac{\text{발표 목표가 } (T_{raw})}{1 + \frac{\text{증권사 평균 편향 } (B_{shrunk})}{100}}$$
 
-- **베이지안 편향 수축 (Bayesian Shrinkage)**: 개별 종목에 대한 리포트 수가 적어 발생하는 통계적 왜곡을 방지하기 위해, 증권사의 종목별 오차율을 전체 종목 평균 오차율 방향으로 보정합니다:
-  $$B_{shrunk} = \frac{N}{N + 5} B_{\text{firm, stock}} + \frac{5}{N + 5} B_{\text{firm, global}}$$
-- **4대 통계 지표 산출**: 보정된 목표가들을 취합하여 현실적인 최대치(Max), 최소치(Min), 중앙값(Median), 평균치(Mean)를 산출합니다.
-- **종목별 감도 컬러 코딩**: 현재가 대비 보정 중앙값(Realistic Median)의 괴리에 따라 종목별 선택 필(Pill)의 색상(상승 여력: Soft Red, 하방 위험: Soft Blue)이 동적으로 변화합니다.
+- **2년 최근성 가중 베이지안 편향 수축 (Recency-Weighted Bayesian Shrinkage)**: 과거 10년 데이터를 동일하게 취급하지 않고 반감기 2년의 지수 감쇄를 적용해 최근 정확도에 더 높은 가중치를 부여하며, 표본이 적은 증권사는 글로벌 최근성 편향으로 수축합니다 ($k=5$).
+- **윈저라이징(10~90%) 및 이상치 차단**: 자릿수 오타(직전 목표가 대비 75% 초과 급락) 및 극단치(`0.20x ~ 3.5x`)를 제거해 평균 및 레인지 게이지 왜곡을 방지합니다.
+- **의견 일치도 (Consensus Dispersion)**: 보정 목표가의 사분위 범위(`IQR / Median`)로 애널리스트 합의 수준을 시각화합니다.
 
-### C. 🎯 3개월 후 주가 예측 모델 (3-Month Stock Price Prediction)
-애널리스트의 목표가는 본래 12개월 전망치이나, 14,500건 이상의 과거 리포트 데이터를 백테스트하여 **3개월 뒤의 가격 변화율을 가장 정확하게 추정하는 최적화 모델**을 구현했습니다.
-$$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha_i \times (T_{\text{adj}} - P_{\text{current}})$$
-- **시간 감쇄 가중치 (Time-Decay Weighted Consensus)**: 최신 리포트에 더 높은 신뢰도를 부여하기 위해 현재 시점 기준 반감기 30일의 기하급수 시간 감쇄 가중치 $w_i = e^{-\lambda \cdot t_i}$를 합산에 적용합니다.
-- **동적 변동성 연동 수렴 계수 ($\alpha_i$)**: 기존 고정 계수($\alpha=0.05$)에서 종목의 최근 1년 역사적 연율화 변동성($\sigma_i$)과 시장 평균 변동성($\bar{\sigma}$)에 연동된 동적 $\alpha_i = \text{clip}\left(0.05 \times \frac{\sigma_i}{\bar{\sigma}}, 0.02, 0.10\right)$를 적용합니다. 고변동성 성장주(NVDA, TSLA)는 빠른 수렴 속도를, 저변동성 방어주(KO, PEP)는 완만한 수렴 속도를 반영하여 예측 정밀도를 극대화했습니다.
+### C. 🎯 Hybrid v2 — 3개월 후 주가 예측 모델 (3-Month Stock Price Prediction)
+2021~2026년 Walk-Forward Out-of-Sample 백테스트(Holdout 2024~2026, $n=1,222$)로 검증된 **3-팩터 하이브리드 예측 모델**을 적용했습니다.
+$$\hat{r}_{3m} = \text{clip}\!\left(0.010 + 0.5 \cdot \alpha_i \cdot \frac{T_{\text{adj}} - P_{\text{now}}}{P_{\text{now}}} + 0.025 \cdot B_{\text{rev}},\ -0.18,\ +0.22\right)$$
+$$\hat{P}_{3m} = P_{\text{now}} \cdot (1 + \hat{r}_{3m}), \qquad \text{68\% 신뢰구간} = \hat{P}_{3m} \cdot \left(1 \pm \sigma_i \sqrt{\frac{90}{365}}\right)$$
+- **동적 변동성 수렴 계수 ($\alpha_i$)**: 1년 연율화 변동성($\sigma_i$) 연동 $\alpha_i = \text{clip}\left(0.05 \times \frac{\sigma_i}{\bar{\sigma}}, 0.02, 0.10\right)$.
+- **애널리스트 리비전 모멘텀 ($B_{\text{rev}}$)**: 최근 90일 목표가 상향 vs 하향 비율 $\frac{N_{\text{up}} - N_{\text{down}}}{N_{\text{up}} + N_{\text{down}}}$을 반영해 방향성을 크게 개선했습니다.
+- **Out-of-Sample 검증 성과 (2024–2026 Holdout)**: 방향 적중률 **58.2%** (기존 45.5% 대비 +12.7%p), **sMAPE 14.57%** (랜덤워크 14.80% 상회), 68% 신뢰구간 실제 커버리지 **69.1%**.
 
 ---
 
@@ -73,7 +74,7 @@ $$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha_i \times (T_{\text{adj}} - P
 ```mermaid
 graph TD
     A[yfinance API & Finviz Scraper] -->|US 주가 및 10년 예측 데이터| D[fetch_data.py <br>증분 수집 엔진]
-    B[네이버 금융 크롤러] -->|KR 최근 55일 리포트 데이터 수집| D
+    B[네이버 증권 JSON API] -->|KR 최근 55일 리포트 수집| D
     C[한경 컨센서스 API] -->|KR 최근 55일 보완 데이터 수집| D
     E[기존 저장된 stocks/*.json] -->|과거 10년사 데이터 누적분| D
     D -->|시간순 정렬 및 중복 제거| F[정제된 리포트 데이터셋]
@@ -91,7 +92,7 @@ graph TD
 - **관리 종목 수**: **총 42개 대표 종목** (미국 21개 + 한국 21개)
   - 🇺🇸 **미국**: NVDA, AAPL, GOOGL, MSFT, AMZN, AVGO, META, TSLA, LLY, JPM, WMT, AMD, V, MA, COST, ORCL, KO, NFLX, **SNDK(SanDisk)**, PEP, DIS
   - 🇰🇷 **한국**: 삼성전자, SK하이닉스, 현대차, **삼성전기**, LG에너지솔루션, 삼성바이오로직스, 삼성물산, KB금융, 삼성생명, 기아, 신한지주, 두산에너빌리티, 현대모비스, 셀트리온, 삼성SDI, NAVER, 삼성화재, POSCO홀딩스, LG화학, 한국전력, 카카오
-- **누적 데이터 규모**: 미국/한국 대표 42대 기업의 약 **`19,970건`** 애널리스트 리포트 데이터셋 및 **189개 증권사** 편향 분석 완료.
+- **누적 데이터 규모**: 미국/한국 대표 42대 기업의 **`20,936건`** 애널리스트 리포트 데이터셋 및 **191개 증권사** 편향 분석 완료.
 - **완료된 마일스톤**:
   1. 한국어/영어 다국어 이원화 및 통화 실시간 변환 엔진 탑재.
   2. 차트 기본 축을 **로그 축(Log Scale)**으로 설정하여 급격한 주가 변화율 왜곡 극복.
@@ -132,10 +133,10 @@ graph TD
 ## 1. Project Overview & Features
 This repository features an interactive dark-mode analytics dashboard tracking forecasting accuracy, bias patterns, and true target premiums for 42 leading US and South Korean stocks.
 
-- **Bilingual & Multi-currency**: Instant toggle between English and Korean, alongside automated USD/KRW currency conversion ($1 = ₩1,380 fixed baseline).
-- **Asynchronous Lazy Loading**: The frontend avoids downloading a heavy bundle. It fetches the lightweight metadata file `summary.json` initially, then pulls detailed stock JSONs (`stocks/{ticker}.json`) dynamically on demand.
-- **Market Cap-Based Ordering**: Stock selection pills are sorted according to live market cap in each respective market.
-- **Google SEO Optimization**: Fully verified with Google Search Console, Schema.org JSON-LD structured data, hreflang language alternates, Open Graph, and Twitter Cards.
+- **Bilingual & Live Multi-currency**: Instant KO/EN switching (preserving `?ticker=` deep links) with live USD/KRW FX rate fetched automatically via `yfinance (KRW=X)`.
+- **Discovery Hub, Screener & Quick Jump**: Market pulse opportunities, 42-stock FX-normalized comparison screener modal, and keyboard Command Palette (`/` or `Ctrl+K`).
+- **Asynchronous Lazy Loading**: Loads lightweight `summary.json` first and fetches individual `stocks/{ticker}.json` files on demand.
+- **Google SEO Optimization**: Verified with Google Search Console, Schema.org JSON-LD, hreflang alternates, Open Graph, and Twitter Cards.
 
 ---
 
@@ -149,15 +150,15 @@ $$\text{Issuance Bias (\%)} = \frac{\text{Target Price} - \text{Price on Report 
 Computes each brokerage's historical **3-Month Realized Bias** to calculate their unique bias factor. The raw target prices are adjusted using this factor:
 $$\text{Adjusted Target } (T_{adj}) = \frac{\text{Raw Target } (T_{raw})}{1 + \frac{\text{Firm Average Bias } (B_{shrunk})}{100}}$$
 
-- **Bayesian Shrinkage**: Prevents statistical distortion from sample size constraints by shrinking stock-specific brokerage bias towards global average bias:
-  $$B_{shrunk} = \frac{N}{N + 5} B_{\text{firm, stock}} + \frac{5}{N + 5} B_{\text{firm, global}}$$
-- **Dynamic Color Coding**: Stock selector pills dynamically scale their color intensity (Soft Red for positive upside potential, Soft Blue for downside risk) based on the deviation between the current price and the Realistic Median.
+- **2-Year Recency-Weighted Bayesian Shrinkage**: Weights historical realized firm bias with a 2-year half-life and shrinks low-sample estimates toward global recency-weighted firm bias ($k=5$), combined with 10–90% Winsorization and digit-drop typo filtering.
 
-### C. 🎯 3-Month Stock Price Prediction Model
-While target prices are inherently 12-month forecasts, we implemented an optimized model to forecast price actions over a **3-month horizon** by backtesting 14,500+ historical analyst reports.
-$$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha_i \times (T_{\text{adj}} - P_{\text{current}})$$
-- **Time-Decay Weighted Consensus**: Applies exponential weight decay with a 30-day half-life ($w_i = e^{-\lambda \cdot t_i}$) anchored to the current timestamp to favor recent macroeconomic updates.
-- **Dynamic Volatility-Adjusted Convergence Factor ($\alpha_i$)**: Instead of a static constant ($\alpha=0.05$), $\alpha_i$ dynamically scales with 1-year historical annualized volatility ($\sigma_i$) relative to market median ($\bar{\sigma}$): $\alpha_i = \text{clip}\left(0.05 \times \frac{\sigma_i}{\bar{\sigma}}, 0.02, 0.10\right)$, tailoring responsiveness for high-beta growth stocks (e.g. NVDA, TSLA) vs low-beta defensive assets (e.g. KO, PEP).
+### C. 🎯 Hybrid v2 — 3-Month Stock Price Prediction Model
+Validated strictly out-of-sample across 2021–2026 walk-forward snapshots (2024–2026 holdout, $n=1,222$):
+$$\hat{r}_{3m} = \text{clip}\!\left(0.010 + 0.5 \cdot \alpha_i \cdot \frac{T_{\text{adj}} - P_{\text{now}}}{P_{\text{now}}} + 0.025 \cdot B_{\text{rev}},\ -0.18,\ +0.22\right)$$
+$$\hat{P}_{3m} = P_{\text{now}} \cdot (1 + \hat{r}_{3m}), \qquad \text{68\% CI} = \hat{P}_{3m} \cdot \left(1 \pm \sigma_i \sqrt{\frac{90}{365}}\right)$$
+- **Dynamic Volatility Convergence ($\alpha_i$)**: Scales with 1-year annualized volatility ($\sigma_i$): $\alpha_i = \text{clip}\left(0.05 \times \frac{\sigma_i}{\bar{\sigma}}, 0.02, 0.10\right)$.
+- **Analyst Revision Momentum ($B_{\text{rev}}$)**: Captures 90-day target upgrade vs downgrade breadth $\frac{N_{\text{up}} - N_{\text{down}}}{N_{\text{up}} + N_{\text{down}}}$.
+- **Holdout Performance (2024–2026)**: **58.2%** directional accuracy (+12.7%p vs prior 45.5%), **14.57% sMAPE** (beating 14.80% random walk), and **69.1%** empirical coverage for the 68% confidence band.
 
 ---
 
@@ -166,7 +167,7 @@ $$P_{\text{pred\_3m}} = P_{\text{current}} + \alpha_i \times (T_{\text{adj}} - P
 ```mermaid
 graph TD
     A[yfinance API & Finviz Scraper] -->|US Price & 10y Consensus Data| D[fetch_data.py <br>Incremental Fetcher]
-    B[Naver Finance Scraper] -->|KR Reports last 55d| D
+    B[Naver Stock JSON API] -->|KR Reports last 55d| D
     C[Hankyung Consensus API] -->|KR Reports last 55d| D
     E[Existing stocks/*.json] -->|Historical Archive| D
     D -->|Merge & Deduplicate| F[Cleaned Dataset]
@@ -184,7 +185,7 @@ graph TD
 - **Stock Coverage**: **42 Major Stocks** (21 US + 21 KR)
   - 🇺🇸 **US**: NVDA, AAPL, GOOGL, MSFT, AMZN, AVGO, META, TSLA, LLY, JPM, WMT, AMD, V, MA, COST, ORCL, KO, NFLX, **SNDK (SanDisk)**, PEP, DIS
   - 🇰🇷 **KR**: Samsung Electronics, SK Hynix, Hyundai Motor, **Samsung Electro-Mechanics**, LG Energy Solution, Samsung Biologics, Samsung C&T, KB Financial, Samsung Life, Kia, Shinhan Financial, Doosan Enerbility, Hyundai Mobis, Celltrion, Samsung SDI, NAVER, Samsung Fire & Marine, POSCO Holdings, LG Chem, KEPCO, Kakao
-- **Consensus Size**: Over **`19,970`** individual analyst reports across **189 brokerage firms**.
+- **Consensus Size**: **`20,936`** individual analyst reports across **191 brokerage firms**.
 - **Completed Milestones**:
   - English/Korean translations and USD/KRW conversion engine implemented.
   - Active logarithmic (Log Scale) chart defaults.
